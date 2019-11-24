@@ -330,6 +330,114 @@ resource "aws_security_group" "sg-ssh-in-local" {
     }
 }
 
+resource "aws_security_group" "sg-web-in" {
+    name = "web-in"
+    description = "Allow http and https inbound connections from anywhere"
+    vpc_id = aws_vpc.vpc.id
+
+    ingress {
+        from_port = 80
+        to_port = 80
+        protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    ingress {
+        from_port = 443
+        to_port = 443
+        protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    tags = {
+        Name = "sg-web-in"
+        Project = "OCP-CAM"
+    }
+}
+
+resource "aws_security_group" "sg-master" {
+    name = "master"
+    description = "Opens the ports required by the master nodes"
+    vpc_id = aws_vpc.vpc.id
+
+    ingress {
+        from_port = 2379
+        to_port = 2380
+        protocol = "tcp"
+        self = true
+    }
+    ingress {
+        from_port = 443
+        to_port = 443
+        protocol = "tcp"
+        security_groups = ["0.0.0.0/0"]
+    }
+    ingress {
+        from_port = 8444
+        to_port = 8444
+        protocol = "tcp"
+        security_groups = ["0.0.0.0/0"]
+    }
+
+    tags = {
+        Name = "sg-master"
+        Project = "OCP-CAM"
+    }
+}
+
+resource "aws_security_group" "sg-node" {
+    name = "node"
+    description = "Opens the ports required by any node, including masters and infras"
+    vpc_id = aws_vpc.vpc.id
+
+    ingress {
+        from_port = 53
+        to_port = 53
+        protocol = "tcp"
+        self = true
+    }
+    ingress {
+        from_port = 53
+        to_port = 53
+        protocol = "udp"
+        self = true
+    }
+    ingress {
+        from_port = 2049
+        to_port = 2049
+        protocol = "tcp"
+        self = true
+    }
+    ingress {
+        from_port = 8053
+        to_port = 8053
+        protocol = "tcp"
+        self = true
+    }
+    ingress {
+        from_port = 10250
+        to_port = 10250
+        protocol = "tcp"
+        self = true
+    }
+    ingress {
+        from_port = 4789
+        to_port = 4789
+        protocol = "udp"
+        self = true
+    }
+    ingress {
+        from_port = 8053
+        to_port = 8053
+        protocol = "udp"
+        self = true
+    }
+    tags = {
+        Name = "sg-node"
+        Project = "OCP-CAM"
+    }
+}
+
 resource "aws_security_group" "sg-web-out" {
     name = "web-out"
     description = "Allow http and https outgoing connections"

@@ -29,7 +29,7 @@ A total of 10 EC2 instances are created:
 
 The bastion host is assigned an Elastic IP, and a corresponding DNS entry is created for that IP.  The A record is created in a different AWS account, so a specific provider is used for the Route53 DNS configuration.
 
-#### Security Rules
+#### Security Groups
 
 According to Terraform [documentation](https://www.terraform.io/docs/providers/aws/r/security_group.html):
 By default, AWS creates an ALLOW ALL egress rule when creating a new Security Group inside of a VPC. Terraform will remove this default rule, and require you specifically re-create it if you desire that rule. We feel this leads to fewer surprises in terms of controlling your egress rules. If you desire this rule to be in place, you can use this egress block:
@@ -41,4 +41,18 @@ egress {
   protocol    = "-1"
   cidr_blocks = ["0.0.0.0/0"]
 }
+```
+
+Quite a few security groups need to be created, I followed the documentation [here](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#required-ports) and [here](https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites)
+To add in Terraform the same security group that is being created as a source security group the option **self = true** muste be used:
+
+```
+resource "aws_security_group" "sg-master" {
+...
+     ingress {
+        from_port = 2379
+        to_port = 2380
+        protocol = "tcp"
+        self = true
+    }
 ```
