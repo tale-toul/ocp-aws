@@ -294,20 +294,20 @@ resource "aws_security_group" "sg-ssh-in" {
     }
 }
 
-resource "aws_security_group" "sg-ssh-out" {
-    name = "ssh-out"
-    description = "Allow outgoing ssh connections to the VPC network"
+resource "aws_security_group" "sg-all-out" {
+    name = "all-out"
+    description = "Allow all outgoing traffic"
     vpc_id = aws_vpc.vpc.id
 
 	egress {
-		from_port = 22
-		to_port = 22
-		protocol = "tcp"
-		cidr_blocks = ["172.20.0.0/16"]
+		from_port = 0
+		to_port = 0
+		protocol = "-1"
+		cidr_blocks = ["0.0.0.0/0"]
     }
 
     tags = {
-        Name = "sg-ssh-out"
+        Name = "all-out"
         Project = "OCP-CAM"
     }
 }
@@ -361,8 +361,7 @@ resource "aws_instance" "tale_bastion" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
-			    aws_security_group.sg-ssh-out.id,
-			    aws_security_group.sg-web-out.id]
+			    aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
   tags = {
