@@ -6,7 +6,7 @@ The Terraform directory contains the neccessary files to create the infrastructu
 
 The architecture used is based on the one descrived in [this reference document](https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf) from Red Hat.
 
-Two different aws providers are defined: 
+Two different aws providers are defined (https://www.terraform.io/docs/configuration/providers.html): 
 
 * One for the majority of the resources created
 * Other for the Route53 DNS name management
@@ -26,3 +26,5 @@ A total of 10 EC2 instances are created:
 * 3 infra nodes, each one deployed in one private subnet hence in an availability zone.
 
 * 3 worker nodes, each one deployed in one private subnet hence in an availability zone.
+
+The bastion host is assigned an Elastic IP, and a corresponding DNS entry is created for that IP.  The A record is created in a different AWS account, so a specific provider is used for the Route53 DNS configuration.

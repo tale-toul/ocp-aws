@@ -141,7 +141,17 @@ resource "aws_eip" "nateip3" {
     }
 }
 
-#NAT GATEWAYS
+resource "aws_eip" "bastion_eip" {
+    vpc = true
+    instance = aws_instance.tale_bastion.id
+
+    tags = {
+        Name = "bastion_eip"
+        Project = "OCP-CAM"
+    }
+}
+
+#NAT GATEWAYs
 resource "aws_nat_gateway" "natgw1" {
     allocation_id = aws_eip.nateip1.id
     subnet_id = aws_subnet.subnet1.id
@@ -540,27 +550,40 @@ resource "aws_instance" "tale_worker03" {
   }
 }
 
+#ROUTE53 CONFIG
+
+#Datasource for taletoul.com. route53 zone
+data "aws_route53_zone" "taletoul" {
+  provider = aws.dns
+  name = "taletoul.com."
+}
+
+resource "aws_route53_record" "bastion" {
+    provider = aws.dns
+    zone_id = data.aws_route53_zone.taletoul.zone_id
+    name = "bastion"
+    type = "A"
+    ttl = "300"
+    records =[aws_eip.bastion_eip.public_ip]
+}
+
 #OUTPUT
 output "bastion_public_ip" {  
  value       = aws_instance.tale_bastion.public_ip  
  description = "The public IP address of bastion server"
 }
-
 output "master01_ip" {
   value = aws_instance.tale_mas01.private_ip
   description = "The private IP address of master01"
 }
-
 output "master02_ip" {
   value = aws_instance.tale_mas02.private_ip
   description = "The private IP address of master02"
 }
-
 output "master03_ip" {
   value = aws_instance.tale_mas03.private_ip
   description = "The private IP address of master03"
 }
-
 output "infra01_ip" {
   value = aws_instance.tale_infra01.private_ip
   description = "The private IP address of infra01"
@@ -577,8 +600,8 @@ output "worker01_ip" {
   value = aws_instance.tale_worker01.private_ip
   description = "The private IP address of woker01"
 }
-output "worker03_ip" {
-  value = aws_instance.tale_worker03.private_ip
+output "worker02_ip" {
+  value = aws_instance.tale_worker02.private_ip
   description = "The private IP address of woker02"
 }
 output "worker03_ip" {
