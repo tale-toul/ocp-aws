@@ -1,0 +1,7 @@
+.*.swp
+tale-toul.pem
+*.tfstate
+*.tfstate.backup
+ocp-on-aws-8.pdf
+redhat-credentials.ini
+tale-credentials.ini
