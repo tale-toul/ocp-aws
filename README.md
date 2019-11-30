@@ -71,3 +71,46 @@ For the load balancing to work properly there a few components that must be crea
 
 The load balancer itself **aws_elb**.- This _classic_ load balancer allows the use of security groups, does not need an x509 certificate to terminate the SSL/TLS connections; allows the definition of a TCP port to listen to and to forward the requests to the EC2 instances downstream.  The subnets where the load balancer will be placed, listening for requests is also defined, along the instances that will receive the requests. Cross zone load balanzing will be enable because the VMs being access are in differente availability zones. The load balancer will be internal or not depending on who will be using it.  Finally a health check against the EC2 instances is defined to verify if they can accept requests.
 
+### Ansible
+
+To run an ansible playbook against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. For this a configuratin file is created **ssh.cfg** that defines a block for the connection parameters for the bastion host, and anothe one for the connection to the rest of the hosts.
+
+```
+Host bastion
+  Hostname                bastion.taletoul.com
+  user                    ec2-user
+  StrictHostKeyChecking   no
+  ProxyCommand            none
+  CheckHostIP             no
+  ForwardAgent            yes
+  IdentityFile            ./tale-toul.pem
+```
+
+To connect to the bastion host the alias **bastion** must be used so the configuration block is applied.  This configuration defines the FQDN of the host to connect to; the remote user to connect as; remote host's key will not be checked; no proxy command is used; key checking is against hostname rather than IP; ssh connection forwarding is enabled so a key managed by ssh agent can be used from this host to connect to another one; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
+
+The command used to connect to the bastion host will be:
+
+```
+$ ssh -F ssh.cfg bastion
+```
+The ssh.cfg file is loaded from the command line.
+The alias **bastion** is used so the configuration block for that name is used 
+
+To connect to other hosts in the VPC, which are in private networks and not directly accesible, the following configuration block is defined:
+
+```
+Host 172.20.*.*
+  StrictHostKeyChecking   no
+  ProxyCommand            ssh ec2-user@bastion.taletoul.com -W %h:%p
+  user                    ec2-user
+  IdentityFile            ./tale-toul.pem
+```
+The block applies to all hosts accesed by IP in the network 172.20.0.0/16; remote key checking is disabled; a proxy command is defined so when connecting to a host is this network this command is run instead; the remote user to connect as is defined; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
+
+To connect to a host in a private subnet the key file must be added to the ssh agent, and then the connection can be established:
+
+```
+$ ssh-agent bash
+$ ssh-add tale-toul.pem
+$ ssh -F ssh.cfg 172.20.10.78
+```

@@ -1,4 +1,5 @@
 .*.swp
+.vimrc
 tale-toul.pem
 *.tfstate
 *.tfstate.backup
