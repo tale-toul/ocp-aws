@@ -1,4 +1,8 @@
-## Openshift Installation on AWS
+## Openshift 3.11 installation on AWS
+
+#REFERENCE DOCUMENTATION
+#https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites
+#https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf
 
 ### Terraform
 
@@ -56,3 +60,14 @@ resource "aws_security_group" "sg-master" {
         self = true
     }
 ```
+
+#### Elastic Load Balancers
+
+[Terraform documentations](https://www.terraform.io/docs/providers/aws/r/lb.html)
+
+Three load balancers will be used: One in front of the masters accepting requests from the Internet; one in front of the masters, not accessible from the Internet, accepting requests from other components of the cluser; one in front of the infra nodes containing the router pods (HAProxy), accepting requests from the Internet. 
+
+For the load balancing to work properly there a few components that must be created and configured:
+
+The load balancer itself **aws_elb**.- This _classic_ load balancer allows the use of security groups, does not need an x509 certificate to terminate the SSL/TLS connections; allows the definition of a TCP port to listen to and to forward the requests to the EC2 instances downstream.  The subnets where the load balancer will be placed, listening for requests is also defined, along the instances that will receive the requests. Cross zone load balanzing will be enable because the VMs being access are in differente availability zones. The load balancer will be internal or not depending on who will be using it.  Finally a health check against the EC2 instances is defined to verify if they can accept requests.
+

@@ -1,7 +1,3 @@
-#REFERENCE DOCUMENTATION
-#https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites
-#https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf
-
 #PROVIDERS
 #https://www.terraform.io/docs/configuration/providers.html#alias-multiple-provider-instances
 #https://www.terraform.io/docs/providers/aws/index.html
@@ -281,11 +277,11 @@ resource "aws_security_group" "sg-ssh-in" {
     description = "Allow ssh connections"
     vpc_id = aws_vpc.vpc.id
 
-	ingress {
-		from_port = 22
-		to_port = 22
-		protocol = "tcp"
-		cidr_blocks = ["0.0.0.0/0"]
+  ingress {
+    from_port = 22
+    to_port = 22
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
     }
 
     tags = {
@@ -299,11 +295,11 @@ resource "aws_security_group" "sg-all-out" {
     description = "Allow all outgoing traffic"
     vpc_id = aws_vpc.vpc.id
 
-	egress {
-		from_port = 0
-		to_port = 0
-		protocol = "-1"
-		cidr_blocks = ["0.0.0.0/0"]
+  egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
     }
 
     tags = {
@@ -317,11 +313,11 @@ resource "aws_security_group" "sg-ssh-in-local" {
     description = "Allow ssh connections from same VPC"
     vpc_id = aws_vpc.vpc.id
 
-	ingress {
-		from_port = 22
-		to_port = 22
-		protocol = "tcp"
-		cidr_blocks = ["172.20.0.0/16"]
+  ingress {
+    from_port = 22
+    to_port = 22
+    protocol = "tcp"
+    cidr_blocks = ["172.20.0.0/16"]
     }
 
     tags = {
@@ -366,17 +362,18 @@ resource "aws_security_group" "sg-master" {
         protocol = "tcp"
         self = true
     }
+
     ingress {
         from_port = 443
         to_port = 443
         protocol = "tcp"
-        security_groups = ["0.0.0.0/0"]
+        cidr_blocks = ["0.0.0.0/0"]
     }
     ingress {
         from_port = 8444
         to_port = 8444
         protocol = "tcp"
-        security_groups = ["0.0.0.0/0"]
+        cidr_blocks = ["0.0.0.0/0"]
     }
 
     tags = {
@@ -443,19 +440,19 @@ resource "aws_security_group" "sg-web-out" {
     description = "Allow http and https outgoing connections"
     vpc_id = aws_vpc.vpc.id
 
-	egress {
-		from_port = 80
-		to_port = 80
-		protocol = "tcp"
-		cidr_blocks = ["0.0.0.0/0"]
-	}
+  egress {
+    from_port = 80
+    to_port = 80
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-	egress {
-		from_port = 443
-		to_port = 443
-		protocol = "tcp"
-		cidr_blocks = ["0.0.0.0/0"]
-	}
+  egress {
+    from_port = 443
+    to_port = 443
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
     tags = {
         Name = "sg-web-out"
@@ -463,13 +460,49 @@ resource "aws_security_group" "sg-web-out" {
     }
 }
 
+#ELBs
+resource "aws_elb" "elb-master-public" {
+  name               = "elb-master-public"
+  internal           = false
+  cross_zone_load_balancing = true
+  connection_draining = false
+  security_groups    = [aws_security_group.sg-master.id]
+  subnets            = [aws_subnet.subnet1.id,
+                        aws_subnet.subnet2.id,
+                        aws_subnet.subnet3.id]
+  instances = [aws_instance.tale_mast01.id,
+               aws_instance.tale_mast02.id,
+               aws_instance.tale_mast03.id]
+
+  listener {
+      instance_port     = 443
+      instance_protocol = "tcp"
+      lb_port           = 443
+      lb_protocol       = "tcp"
+    }
+
+  health_check {
+      healthy_threshold   = 2
+      unhealthy_threshold = 2
+      timeout             = 5
+      target              = "HTTPS:443/api"
+      interval            = 30
+    }
+
+  tags = {
+    Name = "lb-master-public"
+    Project = "OCP-CAM"
+  }
+}
+
 #EC2s
+#Bastion host
 resource "aws_instance" "tale_bastion" {
   ami = "ami-046dc942cb1d63621"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
-			    aws_security_group.sg-all-out.id]
+          aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
   tags = {
@@ -478,13 +511,14 @@ resource "aws_instance" "tale_bastion" {
   }
 }
 
-resource "aws_instance" "tale_mas01" {
+#Masters
+resource "aws_instance" "tale_mast01" {
   ami = "ami-046dc942cb1d63621"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -498,13 +532,13 @@ resource "aws_instance" "tale_mas01" {
   }
 }
 
-resource "aws_instance" "tale_mas02" {
+resource "aws_instance" "tale_mast02" {
   ami = "ami-046dc942cb1d63621"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -518,13 +552,13 @@ resource "aws_instance" "tale_mas02" {
   }
 }
 
-resource "aws_instance" "tale_mas03" {
+resource "aws_instance" "tale_mast03" {
   ami = "ami-046dc942cb1d63621"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -544,7 +578,7 @@ resource "aws_instance" "tale_infra01" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -564,7 +598,7 @@ resource "aws_instance" "tale_infra02" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -583,7 +617,7 @@ resource "aws_instance" "tale_infra03" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -603,7 +637,7 @@ resource "aws_instance" "tale_worker01" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -623,7 +657,7 @@ resource "aws_instance" "tale_worker02" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -643,7 +677,7 @@ resource "aws_instance" "tale_worker03" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-			    aws_security_group.sg-web-out.id]
+          aws_security_group.sg-web-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -680,15 +714,15 @@ output "bastion_public_ip" {
  description = "The public IP address of bastion server"
 }
 output "master01_ip" {
-  value = aws_instance.tale_mas01.private_ip
+  value = aws_instance.tale_mast01.private_ip
   description = "The private IP address of master01"
 }
 output "master02_ip" {
-  value = aws_instance.tale_mas02.private_ip
+  value = aws_instance.tale_mast02.private_ip
   description = "The private IP address of master02"
 }
 output "master03_ip" {
-  value = aws_instance.tale_mas03.private_ip
+  value = aws_instance.tale_mast03.private_ip
   description = "The private IP address of master03"
 }
 output "infra01_ip" {
