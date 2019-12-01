@@ -2,6 +2,7 @@
 *.vimrc
 Ansible/inventario
 Ansible/ansible.log
+Ansible/vault_id
 tale-toul.pem
 *.tfstate
 *.tfstate.backup

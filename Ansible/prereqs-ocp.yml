@@ -1,0 +1,31 @@
+---
+- name: Assing a FQDN name to the bastion
+  hosts: bastion
+  tasks:
+        - name: Assign a proper hostname to the server
+          hostname:
+              name: "{{ inventory_hostname }}.taletoul.com"
+- name: Prerequisites for OCP cluster members
+  hosts: all
+
+  tasks:
+        - name: Register server with Red Hat
+          redhat_subscription:
+              state: present
+              username: "{{ subscription_username }}"
+              password: "{{ subscription_password }}"
+              pool_ids: 8a85f9833e1404a9013e3cddf95a0599
+        - name: Enable the required repositories for Openshift
+          rhsm_repository:
+              name: 
+                - rhel-7-server-rpms
+                - rhel-7-server-extras-rpms
+                - rhel-7-server-ose-3.11-rpms
+                - rhel-7-fast-datapath-rpms
+                - rhel-7-server-ansible-2.6-rpms
+              purge: True
+#        - name: Update system packages
+#          yum:
+#              state: latest
+#              name: '*'
+...
