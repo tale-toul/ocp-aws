@@ -505,7 +505,7 @@ resource "aws_elb" "elb-master-public" {
 #EC2s
 #Bastion host
 resource "aws_instance" "tale_bastion" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
@@ -520,7 +520,7 @@ resource "aws_instance" "tale_bastion" {
 
 #Masters
 resource "aws_instance" "tale_mast01" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
@@ -540,7 +540,7 @@ resource "aws_instance" "tale_mast01" {
 }
 
 resource "aws_instance" "tale_mast02" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
@@ -560,7 +560,7 @@ resource "aws_instance" "tale_mast02" {
 }
 
 resource "aws_instance" "tale_mast03" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
@@ -580,7 +580,7 @@ resource "aws_instance" "tale_mast03" {
 }
 
 resource "aws_instance" "tale_infra01" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
@@ -600,7 +600,7 @@ resource "aws_instance" "tale_infra01" {
 }
 
 resource "aws_instance" "tale_infra02" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
@@ -619,7 +619,7 @@ resource "aws_instance" "tale_infra02" {
   }
 }
 resource "aws_instance" "tale_infra03" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
@@ -639,7 +639,7 @@ resource "aws_instance" "tale_infra03" {
 }
 
 resource "aws_instance" "tale_worker01" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
@@ -659,7 +659,7 @@ resource "aws_instance" "tale_worker01" {
 }
 
 resource "aws_instance" "tale_worker02" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
@@ -679,7 +679,7 @@ resource "aws_instance" "tale_worker02" {
 }
 
 resource "aws_instance" "tale_worker03" {
-  ami = "ami-03eb229e596d2e521"
+  ami = "ami-0404b890c57861c2d"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id

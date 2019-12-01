@@ -15,18 +15,34 @@ Two different aws providers are defined (https://www.terraform.io/docs/configura
 * One for the majority of the resources created
 * Other for the Route53 DNS name management
 
+Each provider uses different access credentials so a credentials file is created like the following:
+
+```
+[default]
+aws_access_key_id=xxxx
+aws_secret_access_key=xxxx
+```
+and the provider definition contains the following directive reference the credentials file:
+
+```
+  shared_credentials_file = "redhat-credentials.ini"
+```
+
+When using different credentials files for each provider it is important to make sure that the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** are not defined in the session, otherwise extraneus errors will appear when running terraform.
+
 Six subnets are created to leverage the High Availavility provided by the Availability Zones in the region, 3 for public subnets, 3 for private subnets.
 
 ####EC2 instances
 
-To look for the AWS amis to use for the hosts in the cluster the following command can be used.  The aws CLI binary needs to be available and the authentication to AWS can be completed exporting the variables **AWS_ACCESS_KEY_ID** and **AWS_SECRET_ACCESS_KEY**:
+The AWS base ami that will be used to deploy the hosts is based on RHEL 7.7.
+To look for the AWS amis the following command can be used.  The aws CLI binary needs to be available, the authentication to AWS can be completed exporting the variables **AWS_ACCESS_KEY_ID** and **AWS_SECRET_ACCESS_KEY**:
 
 ```
 $ export AWS_ACCESS_KEY_ID=xxxxxx
 $ export AWS_SECRET_ACCESS_KEY=xxxxx
-$ aws ec2 describe-images --owners 309956199498 --filters "Name=is-public,Values=false" "Name=name,Values=RHEL*7.7*GA*Access*" --region eu-west-1
+$ aws ec2 describe-images --owners 309956199498 --filters "Name=is-public,Values=true" "Name=name,Values=RHEL*7.7*" --region eu-west-1
 ```
-The command searches for amis in the eu-west-1 (Ireland) region with owner Red Hat (309956199498) and that include in the name the string "RHEL*7.7*GA*Access*".  The output will contain a list of amis released at different dates and with minor differences among them.
+The command searches for **public** amis in the eu-west-1 (Ireland) region with owner Red Hat (309956199498) that include in the name the string "RHEL*7.7*".  The output will contain a list of amis released at different dates and with minor differences among them.
 
 The EC2 VMs created in the private networks need access to the Internet to donwload packages and images, so 3 NAT gateways are created, one for every private subnet.
 
@@ -84,7 +100,7 @@ The load balancer itself **aws_elb**.- This _classic_ load balancer allows the u
 
 ### Ansible
 
-To run an ansible playbook against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. For this a configuratin file is created **ssh.cfg** that defines a block for the connection parameters for the bastion host, and another one for the connection to the rest of the hosts.
+To run an ansible playbook against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. For this a configuratin file is created **ssh.cfg** that defines a block with the connection parameters for the bastion host, and another one for the connection to the rest of the hosts in the VPC.
 
 ```
 Host bastion
@@ -132,6 +148,10 @@ To apply this configuration to ansible the contents of the file must be added to
 $ cat ssh_config >> ~/.ssh/config
 ```
 
+When ansible is run for the first time after the hosts have been created the remote keys need to be accepted, even when using the option **host_key_checking=False** not to be bothered with that key validation.  When an indirect connection is stablished to the hosts in the private subnets the key validation happens both at the bastion host and at the final host, but ansible doesn't seem to be prepared for two question and the play hangs on the second question until a connection timeout is reached.
+
+To avoid this problem we have to make sure that a connection to the bastion host is stablished before going to the hosts in the private subnets, for that reason we have to make sure that we run a play against the bastion host before running another against the registry.
+
 A basic **ansible.cfg** configuration file is created with the following contents:
 
 ```
@@ -147,7 +167,7 @@ The default log file for ansible will be **ansible.log**
 To verify that the configuration is correct and all node are accesble via ansible, an inventory file is created after deploying the terraform infrastructure:
 
 ```
-$ (echo -e "[all]\nbastion";terraform output|cut -d= -f2|egrep '^[[:space:]]172') >inventario
+$ (echo -e "[all]\n bastion";terraform output|egrep -e '_ip[[:space:]]*='|grep -v bastion| cut -d= -f2)> inventario
 ```
 
 And a ping is sent to all hosts:
