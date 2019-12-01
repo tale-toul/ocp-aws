@@ -505,7 +505,7 @@ resource "aws_elb" "elb-master-public" {
 #EC2s
 #Bastion host
 resource "aws_instance" "tale_bastion" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
@@ -520,7 +520,7 @@ resource "aws_instance" "tale_bastion" {
 
 #Masters
 resource "aws_instance" "tale_mast01" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
@@ -540,7 +540,7 @@ resource "aws_instance" "tale_mast01" {
 }
 
 resource "aws_instance" "tale_mast02" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
@@ -560,7 +560,7 @@ resource "aws_instance" "tale_mast02" {
 }
 
 resource "aws_instance" "tale_mast03" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
@@ -580,7 +580,7 @@ resource "aws_instance" "tale_mast03" {
 }
 
 resource "aws_instance" "tale_infra01" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
@@ -600,7 +600,7 @@ resource "aws_instance" "tale_infra01" {
 }
 
 resource "aws_instance" "tale_infra02" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
@@ -619,7 +619,7 @@ resource "aws_instance" "tale_infra02" {
   }
 }
 resource "aws_instance" "tale_infra03" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
@@ -639,7 +639,7 @@ resource "aws_instance" "tale_infra03" {
 }
 
 resource "aws_instance" "tale_worker01" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
@@ -659,7 +659,7 @@ resource "aws_instance" "tale_worker01" {
 }
 
 resource "aws_instance" "tale_worker02" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
@@ -679,7 +679,7 @@ resource "aws_instance" "tale_worker02" {
 }
 
 resource "aws_instance" "tale_worker03" {
-  ami = "ami-046dc942cb1d63621"
+  ami = "ami-03eb229e596d2e521"
 #  instance_type = "m4.large"
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
@@ -724,35 +724,71 @@ output "master01_ip" {
   value = aws_instance.tale_mast01.private_ip
   description = "The private IP address of master01"
 }
+output "master01_name" {
+  value = aws_instance.tale_mast01.private_dns
+  description = "The private FQDN of master01"
+}
 output "master02_ip" {
   value = aws_instance.tale_mast02.private_ip
   description = "The private IP address of master02"
+}
+output "master02_name" {
+  value = aws_instance.tale_mast02.private_dns
+  description = "The private FQDN of master02"
 }
 output "master03_ip" {
   value = aws_instance.tale_mast03.private_ip
   description = "The private IP address of master03"
 }
+output "master03_name" {
+  value = aws_instance.tale_mast03.private_dns
+  description = "The private FQDN of master03"
+}
 output "infra01_ip" {
   value = aws_instance.tale_infra01.private_ip
   description = "The private IP address of infra01"
+}
+output "infra01_name" {
+  value = aws_instance.tale_infra01.private_dns
+  description = "The private FQDN of infra01"
 }
 output "infra02_ip" {
   value = aws_instance.tale_infra02.private_ip
   description = "The private IP address of infra02"
 }
+output "infra02_name" {
+  value = aws_instance.tale_infra02.private_dns
+  description = "The private FQDN of infra02"
+}
 output "infra03_ip" {
   value = aws_instance.tale_infra03.private_ip
   description = "The private IP address of infra03"
+}
+output "infra03_name" {
+  value = aws_instance.tale_infra03.private_dns
+  description = "The private FQDN of infra03"
 }
 output "worker01_ip" {
   value = aws_instance.tale_worker01.private_ip
   description = "The private IP address of woker01"
 }
+output "worker01_name" {
+  value = aws_instance.tale_worker01.private_dns
+  description = "The private FQDN of woker01"
+}
 output "worker02_ip" {
   value = aws_instance.tale_worker02.private_ip
   description = "The private IP address of woker02"
 }
+output "worker02_name" {
+  value = aws_instance.tale_worker02.private_dns
+  description = "The private FQDN of woker02"
+}
 output "worker03_ip" {
   value = aws_instance.tale_worker03.private_ip
   description = "The private IP address of woker03"
+}
+output "worker03_name" {
+  value = aws_instance.tale_worker03.private_dns
+  description = "The private FQDN of woker03"
 }

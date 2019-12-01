@@ -1,5 +1,7 @@
 .*.swp
-.vimrc
+*.vimrc
+Ansible/inventario
+Ansible/ansible.log
 tale-toul.pem
 *.tfstate
 *.tfstate.backup
