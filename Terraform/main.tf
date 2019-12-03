@@ -503,6 +503,41 @@ resource "aws_elb" "elb-master-public" {
   }
 }
 
+resource "aws_elb" "elb-master-private" {
+  name               = "elb-master-private"
+  internal           = true
+  cross_zone_load_balancing = true
+  connection_draining = false
+  security_groups    = [aws_security_group.sg-master.id,
+                        aws_security_group.sg-all-out.id]
+  subnets            = [aws_subnet.subnet_priv1.id,
+                        aws_subnet.subnet_priv2.id,
+                        aws_subnet.subnet_priv3.id]
+  instances = [aws_instance.tale_mast01.id,
+               aws_instance.tale_mast02.id,
+               aws_instance.tale_mast03.id]
+
+  listener {
+      instance_port     = 443
+      instance_protocol = "tcp"
+      lb_port           = 443
+      lb_protocol       = "tcp"
+    }
+
+  health_check {
+      healthy_threshold   = 3
+      unhealthy_threshold = 2
+      timeout             = 3
+      target              = "HTTPS:443/api"
+      interval            = 10
+    }
+
+  tags = {
+    Name = "lb-master-private"
+    Project = "OCP-CAM"
+  }
+}
+
 #EC2s
 #Bastion host
 resource "aws_instance" "tale_bastion" {

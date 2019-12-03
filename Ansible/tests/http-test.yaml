@@ -27,11 +27,23 @@
         group: root
         mode: '0644'
 
-    - name: Create a hard link to the index.html file in /
-      file:
-        src: /var/www/html/index.html
+    - name: Create healthz file
+      copy:
+        content: |
+          I am healthy from {{ ansible_hostname }}
         dest: /var/www/html/healthz
-        state: hard
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create api file
+      copy:
+        content: |
+          API pseudo entry point from {{ ansible_hostname }}
+        dest: /var/www/html/api
+        owner: root
+        group: root
+        mode: '0644'
 
     - name: Add SELinux context to port 8444
       seport:

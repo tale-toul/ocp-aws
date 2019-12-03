@@ -97,11 +97,16 @@ resource "aws_security_group" "sg-master" {
 
 [Terraform documentations](https://www.terraform.io/docs/providers/aws/r/lb.html)
 
-Three load balancers will be used: One in front of the masters accepting requests from the Internet; one in front of the masters, not accessible from the Internet, accepting requests from other components of the cluser; one in front of the infra nodes containing the router pods (HAProxy), accepting requests from the Internet. 
+Three load balancers are created: 
+
+* An ELB in front of the masters accepting requests from the Internet.  This load balancer will accept requests on ports 443 and 8444.
+
+* An ELB in front of the masters, internal, not accessible from the Internet, accepting requests from other components of the cluser.  This load balancer accepts requests on port 443.
+
+* An ELB in front of the infra nodes containing the router pods (HAProxy), accepting requests from the Internet.  This load balancer accepts requests on ports 80 and 443.
 
 The load balancers are of type **aws_elb**.- This _classic_ load balancer allows the use of security groups, does not need an x509 certificate to terminate the SSL/TLS connections; allows the definition of a TCP port to listen to and to forward the requests to the EC2 instances downstream.  The subnets where the load balancer will be placed, listening for requests is also defined, along the instances that will receive the requests. Cross zone load balanzing will be enable because the VMs being access are in differente availability zones. The load balancer will be internal or not depending on who will be using it.  Finally a health check against the EC2 instances is defined to verify if they can accept requests.
 
-The load balancer facing the Internet in front of the masters will accept requests on ports 443 and 8444.
 
 ### Ansible
 
@@ -201,8 +206,8 @@ A directory called _tests_ within the Ansible one is created to hold test playbo
 
 Before running any of these playbooks the prereqs-ocp.yml playbook must be run.
 
-* **http-test.yaml**.- This playbooks is run agains the master nodes and installs an httpd server; copies a configuration file to set up an SSL virtual host using a locally generated self signed x509 certificate, with document root at **/var/www/html**. A very simple index.html is added to the Document root containing the hostname of the node so when the connection is tested we know which node we hit.  As a final step the httpd service is started.  Once the playbook is run, we can use a command like the following to access the web servers through the external load balancer:
+* **http-test.yaml**.- This playbooks is run agains the master nodes and installs an httpd server; copies a configuration file to set up an SSL virtual host using a locally generated self signed x509 certificate, with document root at **/var/www/html**. A very simple index.html is added to the Document root containing the hostname of the node so when the connection is tested we know which node we hit, an additional copy of the file with name healthz is created to make the health check of the AWS load balancers happy.  As a final step the httpd service is restarted.  Once the playbook is run, we can use a command like the following to access the web servers through the external load balancer:
 
 `` 
-$ while true; do curl -k https://elb-master-public-697013167.eu-west-1.elb.amazonaws.com/; sleep 2; done
+$ while true; do curl -k https://elb-master-public-697013167.eu-west-1.elb.amazonaws.com/; sleep 1; done
 `` 
