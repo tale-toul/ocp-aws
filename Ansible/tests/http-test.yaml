@@ -1,0 +1,34 @@
+---
+- name: Set up httpd server for testing load balancers
+  hosts: masters
+
+  tasks:
+    - name: Install the latest version of Apache httpd
+      yum:
+        name:
+          - httpd
+          - mod_ssl
+        state: latest
+
+    - name: Copy file with owner and permissions
+      copy:
+        src: ssl.conf
+        dest: /etc/httpd/conf.d
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create index.html file
+      copy:
+        content: |
+          Hello from {{ ansible_hostname }}
+        dest: /var/www/html/index.html
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Start service httpd, if not started
+      service:
+        name: httpd
+        state: started
+...

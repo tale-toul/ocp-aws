@@ -4,7 +4,7 @@
   tasks:
         - name: Assign a proper hostname to the server
           hostname:
-              name: "{{ inventory_hostname }}.taletoul.com"
+              name: "{{ inventory_hostname }}"
 - name: Prerequisites for OCP cluster members
   hosts: all
 

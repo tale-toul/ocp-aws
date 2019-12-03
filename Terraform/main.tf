@@ -466,7 +466,8 @@ resource "aws_elb" "elb-master-public" {
   internal           = false
   cross_zone_load_balancing = true
   connection_draining = false
-  security_groups    = [aws_security_group.sg-master.id]
+  security_groups    = [aws_security_group.sg-master.id,
+                        aws_security_group.sg-all-out.id]
   subnets            = [aws_subnet.subnet1.id,
                         aws_subnet.subnet2.id,
                         aws_subnet.subnet3.id]
@@ -509,7 +510,7 @@ resource "aws_instance" "tale_bastion" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
-          aws_security_group.sg-all-out.id]
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
   tags = {
@@ -525,7 +526,8 @@ resource "aws_instance" "tale_mast01" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-master.id,
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -545,7 +547,8 @@ resource "aws_instance" "tale_mast02" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-master.id,
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -565,7 +568,8 @@ resource "aws_instance" "tale_mast03" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-master.id,
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -585,7 +589,7 @@ resource "aws_instance" "tale_infra01" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -605,7 +609,7 @@ resource "aws_instance" "tale_infra02" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -624,7 +628,7 @@ resource "aws_instance" "tale_infra03" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -644,7 +648,7 @@ resource "aws_instance" "tale_worker01" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -664,7 +668,7 @@ resource "aws_instance" "tale_worker02" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {
@@ -684,7 +688,7 @@ resource "aws_instance" "tale_worker03" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-          aws_security_group.sg-web-out.id]
+                            aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
 #  root_block_device {

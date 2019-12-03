@@ -60,12 +60,16 @@ A total of 10 EC2 instances are created:
 
 The bastion host is assigned an Elastic IP, and a corresponding DNS entry is created for that IP.  The A record is created in a different AWS account, so a specific provider is used for the Route53 DNS configuration.
 
+The EC2 instances need the right security group assigned depending on the particular role of the instace.
+
 #### Security Groups
 
 According to Terraform [documentation](https://www.terraform.io/docs/providers/aws/r/security_group.html):
 By default, AWS creates an ALLOW ALL egress rule when creating a new Security Group inside of a VPC. Terraform will remove this default rule, and require you specifically re-create it if you desire that rule. We feel this leads to fewer surprises in terms of controlling your egress rules. If you desire this rule to be in place, you can use this egress block:
 
 ```
+resource "aws_security_group" "sg-all-out" {
+...
 egress {
   from_port   = 0
   to_port     = 0
@@ -73,6 +77,7 @@ egress {
   cidr_blocks = ["0.0.0.0/0"]
 }
 ```
+This _allow-all-out_ security group is assigned to most of the EC2 instances and load balancers.
 
 Quite a few security groups need to be created, I followed the documentation [here](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#required-ports) and [here](https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites)
 To add in Terraform the same security group that is being created as a source security group the option **self = true** muste be used:
@@ -94,16 +99,16 @@ resource "aws_security_group" "sg-master" {
 
 Three load balancers will be used: One in front of the masters accepting requests from the Internet; one in front of the masters, not accessible from the Internet, accepting requests from other components of the cluser; one in front of the infra nodes containing the router pods (HAProxy), accepting requests from the Internet. 
 
-For the load balancing to work properly there a few components that must be created and configured:
+The load balancers are of type **aws_elb**.- This _classic_ load balancer allows the use of security groups, does not need an x509 certificate to terminate the SSL/TLS connections; allows the definition of a TCP port to listen to and to forward the requests to the EC2 instances downstream.  The subnets where the load balancer will be placed, listening for requests is also defined, along the instances that will receive the requests. Cross zone load balanzing will be enable because the VMs being access are in differente availability zones. The load balancer will be internal or not depending on who will be using it.  Finally a health check against the EC2 instances is defined to verify if they can accept requests.
 
-The load balancer itself **aws_elb**.- This _classic_ load balancer allows the use of security groups, does not need an x509 certificate to terminate the SSL/TLS connections; allows the definition of a TCP port to listen to and to forward the requests to the EC2 instances downstream.  The subnets where the load balancer will be placed, listening for requests is also defined, along the instances that will receive the requests. Cross zone load balanzing will be enable because the VMs being access are in differente availability zones. The load balancer will be internal or not depending on who will be using it.  Finally a health check against the EC2 instances is defined to verify if they can accept requests.
+The load balancer facing the Internet in front of the masters will accept requests on ports 443 and 8444.
 
 ### Ansible
 
 To run an ansible playbook against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. For this a configuratin file is created **ssh.cfg** that defines a block with the connection parameters for the bastion host, and another one for the connection to the rest of the hosts in the VPC.
 
 ```
-Host bastion
+Host bastion.taletoul.com
   Hostname                bastion.taletoul.com
   user                    ec2-user
   StrictHostKeyChecking   no
@@ -111,35 +116,35 @@ Host bastion
   CheckHostIP             no
   ForwardAgent            yes
   IdentityFile            ./tale-toul.pem
+
 ```
 
-To connect to the bastion host the alias **bastion** must be used so the configuration block is applied.  This configuration defines the FQDN of the host to connect to; the remote user to connect as; remote host's key will not be checked; no proxy command is used; key checking is against hostname rather than IP; ssh connection forwarding is enabled so a key managed by ssh agent can be used from this host to connect to another one; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
+To connect to the bastion host the name **bastion.taletoul.com** must be used so the configuration block is applied.  This configuration defines the FQDN of the host to connect to; the remote user to connect as; remote host's key will not be checked; no proxy command is used; key checking is against hostname rather than IP; ssh connection forwarding is enabled so a key managed by ssh agent can be used from this host to connect to another one; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
 
 The command used to connect to the bastion host will be:
 
 ```
-$ ssh -F ssh.cfg bastion
+$ ssh -F ssh.cfg bastion.taletoul.com
 ```
 The ssh.cfg file is loaded from the command line.
-The alias **bastion** is used so the configuration block for that name is used 
 
-To connect to other hosts in the VPC, which are in private networks and not directly accesible, the following configuration block is defined:
+To connect to other hosts in the VPC, which are in private networks and therefore not directly accesible, the following configuration block is defined:
 
 ```
-Host 172.20.*.*
+Host *.eu-west-1.compute.internal
   StrictHostKeyChecking   no
   ProxyCommand            ssh ec2-user@bastion.taletoul.com -W %h:%p
   user                    ec2-user
   IdentityFile            ./tale-toul.pem
 ```
-The block applies to all hosts accesed by IP in the network 172.20.0.0/16; remote key checking is disabled; a proxy command is defined so when connecting to a host is this network this command is run instead; the remote user to connect as is defined; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
+The block applies to all hosts in the DNS domain **eu-west-1.compute.internal**; remote key checking is disabled; a proxy command is defined so when connecting to a host is this network this command is run instead; the remote user to connect as is defined; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
 
 To connect to a host in a private subnet the key file must be added to the ssh agent, and then the connection can be established:
 
 ```
 $ ssh-agent bash
 $ ssh-add tale-toul.pem
-$ ssh -F ssh.cfg 172.20.10.78
+$ ssh -F ssh.cfg ip-172-20-20-220.eu-west-1.compute.internal
 ```
 
 To apply this configuration to ansible the contents of the file must be added to one of the standar config files: /etc/ssh/ss_config or ~/.ssh/config
@@ -167,7 +172,7 @@ The default log file for ansible will be **ansible.log**
 To verify that the configuration is correct and all node are accesble via ansible, an inventory file is created after deploying the terraform infrastructure:
 
 ```
-$ (echo -e "[all]\n bastion";terraform output|egrep -e '_ip[[:space:]]*='|grep -v bastion| cut -d= -f2)> inventario
+$ (echo -e "[bastion]\n bastion.taletoul.com\n[all]\n bastion.taletoul.com";terraform output|egrep -e '_name[[:space:]]*='|grep -v bastion| cut -d= -f2) > inventario
 ```
 
 And a ping is sent to all hosts:
@@ -175,3 +180,27 @@ And a ping is sent to all hosts:
 ```
 $ ansible all -m ping 
 ```
+
+####Prerequisites
+
+A playbook is created to apply some prerequisites in the cluster host.  The playbook is **prereqs-ocp.yml**.
+
+In the first play a single tasks run against the bastion host serves to puposes: make sure the bastion is accessed before the rest of the hosts in the private networks, and to change the hostname to bastion.taletoul.com
+
+The sencond play subscribes all the hosts with Red Hat; enables the repositories needed to install Openshift.
+
+The username and password required to register the hosts with Red Hat are encrypted in a vault file.  the playbook must be run providing the password to unencrypt that file, for example by storing the password in a file and using the command:
+
+```
+$ ansible-playbook --vault-id vault_id.txt prereqs-ocp.yml
+```
+
+####Tests
+
+A directory called _tests_ within the Ansible one is created to hold test playbooks to verify that the infrastructure works as expected:
+
+* **http-test.yaml**.- This playbooks is run agains the master nodes and installs an httpd server; copies a configuration file to set up an SSL virtual host using a locally generated self signed x509 certificate, with document root at **/var/www/html**. A very simple index.html is added to the Document root containing the hostname of the node so when the connection is tested we know which node we hit.  As a final step the httpd service is started.  Once the playbook is run, we can use a command like the following to access the web servers through the external load balancer:
+
+`` 
+$ while true; do curl -k https://elb-master-public-697013167.eu-west-1.elb.amazonaws.com/; sleep 2; done
+`` 
