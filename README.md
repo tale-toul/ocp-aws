@@ -172,7 +172,7 @@ The default log file for ansible will be **ansible.log**
 To verify that the configuration is correct and all node are accesble via ansible, an inventory file is created after deploying the terraform infrastructure:
 
 ```
-$ (echo -e "[bastion]\n bastion.taletoul.com\n[all]\n bastion.taletoul.com";terraform output|egrep -e '_name[[:space:]]*='|grep -v bastion| cut -d= -f2) > inventario
+$ (echo -e "[bastion]\n bastion.taletoul.com\n[masters]";terraform output|egrep 'master.+_name'|cut -d= -f2; echo -e "[nodes]\n bastion.taletoul.com";terraform output|egrep -e '_name[[:space:]]*='| cut -d= -f2) > inventario
 ```
 
 And a ping is sent to all hosts:
@@ -198,6 +198,8 @@ $ ansible-playbook --vault-id vault_id.txt prereqs-ocp.yml
 ####Tests
 
 A directory called _tests_ within the Ansible one is created to hold test playbooks to verify that the infrastructure works as expected:
+
+Before running any of these playbooks the prereqs-ocp.yml playbook must be run.
 
 * **http-test.yaml**.- This playbooks is run agains the master nodes and installs an httpd server; copies a configuration file to set up an SSL virtual host using a locally generated self signed x509 certificate, with document root at **/var/www/html**. A very simple index.html is added to the Document root containing the hostname of the node so when the connection is tested we know which node we hit.  As a final step the httpd service is started.  Once the playbook is run, we can use a command like the following to access the web servers through the external load balancer:
 

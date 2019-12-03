@@ -14,7 +14,7 @@
               state: present
               username: "{{ subscription_username }}"
               password: "{{ subscription_password }}"
-              pool_ids: 8a85f9833e1404a9013e3cddf95a0599
+              pool_ids: 8a85f9833e1404a9013e3cddf99305e6
         - name: Enable the required repositories for Openshift
           rhsm_repository:
               name: 

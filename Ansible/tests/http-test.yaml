@@ -10,7 +10,7 @@
           - mod_ssl
         state: latest
 
-    - name: Copy file with owner and permissions
+    - name: Copy ssl.conf 
       copy:
         src: ssl.conf
         dest: /etc/httpd/conf.d
@@ -27,8 +27,21 @@
         group: root
         mode: '0644'
 
+    - name: Create a hard link to the index.html file in /
+      file:
+        src: /var/www/html/index.html
+        dest: /var/www/html/healthz
+        state: hard
+
+    - name: Add SELinux context to port 8444
+      seport:
+        ports: 8444
+        proto: tcp 
+        setype: http_port_t
+        state: present
+
     - name: Start service httpd, if not started
       service:
         name: httpd
-        state: started
+        state: restarted
 ...
