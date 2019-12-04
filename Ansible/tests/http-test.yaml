@@ -1,59 +1,63 @@
 ---
 - name: Set up httpd server for testing load balancers
-  hosts: masters
+  hosts: nodes
 
   tasks:
-    - name: Install the latest version of Apache httpd
-      yum:
-        name:
-          - httpd
-          - mod_ssl
-        state: latest
-
-    - name: Copy ssl.conf 
-      copy:
-        src: ssl.conf
-        dest: /etc/httpd/conf.d
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Create index.html file
-      copy:
-        content: |
-          Hello from {{ ansible_hostname }}
-        dest: /var/www/html/index.html
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Create healthz file
-      copy:
-        content: |
-          I am healthy from {{ ansible_hostname }}
-        dest: /var/www/html/healthz
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Create api file
-      copy:
-        content: |
-          API pseudo entry point from {{ ansible_hostname }}
-        dest: /var/www/html/api
-        owner: root
-        group: root
-        mode: '0644'
-
-    - name: Add SELinux context to port 8444
-      seport:
-        ports: 8444
-        proto: tcp 
-        setype: http_port_t
-        state: present
-
-    - name: Start service httpd, if not started
-      service:
-        name: httpd
-        state: restarted
+    - name: Set up http for tests on masters and infras
+      block:
+        - name: Install the latest version of Apache httpd
+          yum:
+            name:
+              - httpd
+              - mod_ssl
+            state: latest
+    
+        - name: Copy ssl.conf 
+          copy:
+            src: ssl.conf
+            dest: /etc/httpd/conf.d
+            owner: root
+            group: root
+            mode: '0644'
+    
+        - name: Create index.html file
+          copy:
+            content: |
+              Hello from {{ ansible_hostname }}
+            dest: /var/www/html/index.html
+            owner: root
+            group: root
+            mode: '0644'
+    
+        - name: Create healthz file
+          copy:
+            content: |
+              I am healthy from {{ ansible_hostname }}
+            dest: /var/www/html/healthz
+            owner: root
+            group: root
+            mode: '0644'
+    
+        - name: Create api file
+          copy:
+            content: |
+              API pseudo entry point from {{ ansible_hostname }}
+            dest: /var/www/html/api
+            owner: root
+            group: root
+            mode: '0644'
+    
+        - name: Add SELinux context to port 8444
+          seport:
+            ports: 8444
+            proto: tcp 
+            setype: http_port_t
+            state: present
+    
+        - name: Start service httpd, if not started
+          service:
+            name: httpd
+            state: restarted
+      when: hostvars[inventory_hostname].openshift_node_group_name is defined and 
+            (hostvars[inventory_hostname].openshift_node_group_name == 'node-config-master' or hostvars[inventory_hostname].openshift_node_group_name == 'node-config-infra') 
 ...

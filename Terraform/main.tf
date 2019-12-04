@@ -14,6 +14,13 @@ provider "aws" {
   shared_credentials_file = "tale-credentials.ini"
 }
 
+#VARIABLES
+variable "cluster_name" {
+  description = "Cluser name, used for prefixing some component names like the DNS domain"
+  type = string
+  default = "ocp"
+}
+
 #VPC
 resource "aws_vpc" "vpc" {
     cidr_block = "172.20.0.0/16"
@@ -538,6 +545,48 @@ resource "aws_elb" "elb-master-private" {
   }
 }
 
+resource "aws_elb" "elb-infra-public" {
+  name               = "elb-infra-public"
+  internal           = false
+  cross_zone_load_balancing = true
+  connection_draining = false
+  security_groups    = [aws_security_group.sg-web-in.id,
+                        aws_security_group.sg-all-out.id]
+  subnets            = [aws_subnet.subnet1.id,
+                        aws_subnet.subnet2.id,
+                        aws_subnet.subnet3.id]
+  instances = [aws_instance.tale_infra01.id,
+               aws_instance.tale_infra02.id,
+               aws_instance.tale_infra03.id]
+
+  listener {
+      instance_port     = 80
+      instance_protocol = "tcp"
+      lb_port           = 80
+      lb_protocol       = "tcp"
+    }
+
+  listener {
+      instance_port     = 443
+      instance_protocol = "tcp"
+      lb_port           = 443
+      lb_protocol       = "tcp"
+    }
+
+  health_check {
+      healthy_threshold   = 2
+      unhealthy_threshold = 2
+      timeout             = 2
+      target              = "TCP:443"
+      interval            = 5
+    }
+
+  tags = {
+    Name = "lb-infra-public"
+    Project = "OCP-CAM"
+  }
+}
+
 #EC2s
 #Bastion host
 resource "aws_instance" "tale_bastion" {
@@ -624,6 +673,7 @@ resource "aws_instance" "tale_infra01" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
+                            aws_security_group.sg-web-in.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
@@ -644,6 +694,7 @@ resource "aws_instance" "tale_infra02" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
+                            aws_security_group.sg-web-in.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
@@ -663,6 +714,7 @@ resource "aws_instance" "tale_infra03" {
   instance_type = "t2.small"
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
+                            aws_security_group.sg-web-in.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
 
@@ -745,6 +797,32 @@ data "aws_route53_zone" "taletoul" {
   name = "taletoul.com."
 }
 
+#External hosted zone, this is a public zone because it is not associated with a VPC
+#resource "aws_route53_zone" "external" {
+#  provider = aws.dns
+#  name = "${var.cluster_name}ext.taletoul.com."
+#
+#  tags = {
+#    Name = "external"
+#    Project = "OCP-CAM"
+#  }
+#}
+
+#Internal hosted zone, this is a private zone because it is associated with a VPC
+#resource "aws_route53_zone" "internal" {
+#  provider = aws.dns
+#  name = "${var.cluster_name}int.taletoul.com."
+#
+#  vpc {
+#    vpc_id = aws_vpc.vpc.id
+#  }
+#
+#  tags = {
+#    Name = "internal"
+#    Project = "OCP-CAM"
+#  }
+#}
+
 resource "aws_route53_record" "bastion" {
     provider = aws.dns
     zone_id = data.aws_route53_zone.taletoul.zone_id
@@ -753,6 +831,24 @@ resource "aws_route53_record" "bastion" {
     ttl = "300"
     records =[aws_eip.bastion_eip.public_ip]
 }
+
+#resource "aws_route53_record" "master-ext" {
+#    provider = aws.dns
+#    zone_id = aws_route53_zone.external.zone_id
+#    name = "master"
+#    type = "CNAME"
+#    ttl = "300"
+#    records =[aws_elb.elb-master-public.dns_name]
+#} 
+
+#resource "aws_route53_record" "master-int" {
+#    provider = aws.dns
+#    zone_id = aws_route53_zone.internal.zone_id
+#    name = "master"
+#    type = "CNAME"
+#    ttl = "300"
+#    records =[aws_elb.elb-master-private.dns_name]
+#}
 
 #OUTPUT
 output "bastion_public_ip" {  
