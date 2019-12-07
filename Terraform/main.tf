@@ -7,13 +7,6 @@ provider "aws" {
   shared_credentials_file = "redhat-credentials.ini"
 }
 
-provider "aws" {
-  alias = "dns"
-  region = "eu-west-1"
-  version = "~> 2.39"
-  shared_credentials_file = "tale-credentials.ini"
-}
-
 #VARIABLES
 variable "cluster_name" {
   description = "Cluser name, used for prefixing some component names like the DNS domain"
@@ -791,69 +784,97 @@ resource "aws_instance" "tale_worker03" {
 
 #ROUTE53 CONFIG
 
-#Datasource for taletoul.com. route53 zone
-data "aws_route53_zone" "taletoul" {
-  provider = aws.dns
-  name = "taletoul.com."
+#Datasource for rhcee.support. route53 zone
+data "aws_route53_zone" "rhcee" {
+  zone_id = "Z1UPG9G4YY4YK6"
 }
 
+
 #External hosted zone, this is a public zone because it is not associated with a VPC
-#resource "aws_route53_zone" "external" {
-#  provider = aws.dns
-#  name = "${var.cluster_name}ext.taletoul.com."
-#
-#  tags = {
-#    Name = "external"
-#    Project = "OCP-CAM"
-#  }
-#}
+resource "aws_route53_zone" "external" {
+  name = "${var.cluster_name}ext.rhcee.support."
+
+  tags = {
+    Name = "external"
+    Project = "OCP-CAM"
+  }
+}
+
+resource "aws_route53_record" "external-ns" {
+  zone_id = data.aws_route53_zone.rhcee.zone_id
+  name    = "${var.cluster_name}ext.rhcee.support."
+  type    = "NS"
+  ttl     = "30"
+
+  records = [
+    "${aws_route53_zone.external.name_servers.0}",
+    "${aws_route53_zone.external.name_servers.1}",
+    "${aws_route53_zone.external.name_servers.2}",
+    "${aws_route53_zone.external.name_servers.3}",
+  ]
+}
 
 #Internal hosted zone, this is a private zone because it is associated with a VPC
-#resource "aws_route53_zone" "internal" {
-#  provider = aws.dns
-#  name = "${var.cluster_name}int.taletoul.com."
-#
-#  vpc {
-#    vpc_id = aws_vpc.vpc.id
-#  }
-#
-#  tags = {
-#    Name = "internal"
-#    Project = "OCP-CAM"
-#  }
-#}
+resource "aws_route53_zone" "internal" {
+  name = "${var.cluster_name}int.rhcee.support."
+
+  vpc {
+    vpc_id = aws_vpc.vpc.id
+  }
+
+  tags = {
+    Name = "internal"
+    Project = "OCP-CAM"
+  }
+}
 
 resource "aws_route53_record" "bastion" {
-    provider = aws.dns
-    zone_id = data.aws_route53_zone.taletoul.zone_id
+    zone_id = aws_route53_zone.external.zone_id
     name = "bastion"
     type = "A"
     ttl = "300"
     records =[aws_eip.bastion_eip.public_ip]
 }
 
-#resource "aws_route53_record" "master-ext" {
-#    provider = aws.dns
-#    zone_id = aws_route53_zone.external.zone_id
-#    name = "master"
-#    type = "CNAME"
-#    ttl = "300"
-#    records =[aws_elb.elb-master-public.dns_name]
-#} 
+resource "aws_route53_record" "master-ext" {
+    zone_id = aws_route53_zone.external.zone_id
+    name = "master"
+    type = "CNAME"
+    ttl = "300"
+    records =[aws_elb.elb-master-public.dns_name]
+} 
 
-#resource "aws_route53_record" "master-int" {
-#    provider = aws.dns
-#    zone_id = aws_route53_zone.internal.zone_id
-#    name = "master"
-#    type = "CNAME"
-#    ttl = "300"
-#    records =[aws_elb.elb-master-private.dns_name]
-#}
+resource "aws_route53_record" "apps-domain" {
+    zone_id = aws_route53_zone.external.zone_id
+    name = "*.apps"
+    type = "CNAME"
+    ttl = "300"
+    records = [aws_elb.elb-infra-public.dns_name]
+}
+
+resource "aws_route53_record" "apps-intdomain" {
+    zone_id = aws_route53_zone.internal.zone_id
+    name = "*.apps"
+    type = "CNAME"
+    ttl = "300"
+    records = [aws_elb.elb-infra-public.dns_name]
+}
+resource "aws_route53_record" "master-int" {
+    zone_id = aws_route53_zone.internal.zone_id
+    name = "master"
+    type = "CNAME"
+    ttl = "300"
+    records =[aws_elb.elb-master-private.dns_name]
+}
 
 #OUTPUT
 output "bastion_public_ip" {  
  value       = aws_instance.tale_bastion.public_ip  
  description = "The public IP address of bastion server"
+}
+output "bastion_dns_name" {
+  value = aws_route53_record.bastion.fqdn
+  description = "DNS name for bastion host"
 }
 output "master01_ip" {
   value = aws_instance.tale_mast01.private_ip
@@ -926,4 +947,8 @@ output "worker03_ip" {
 output "worker03_name" {
   value = aws_instance.tale_worker03.private_dns
   description = "The private FQDN of woker03"
+}
+output "master_public_lb" {
+  value = aws_route53_record.master-ext.fqdn
+  description = "The DNS name of the public load balancer in front of masters"
 }

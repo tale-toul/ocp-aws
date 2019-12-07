@@ -10,25 +10,20 @@ The Terraform directory contains the neccessary files to create the infrastructu
 
 The architecture used is based on the one descrived in [this reference document](https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf) from Red Hat.
 
-Two different aws providers are defined (https://www.terraform.io/docs/configuration/providers.html): 
-
-* One for the majority of the resources created
-* Other for the Route53 DNS name management
-
-Each provider uses different access credentials so a credentials file is created like the following:
+One provider is defined (https://www.terraform.io/docs/configuration/providers.html) to create the resources in AWS.  A credentials file is created with the following format:
 
 ```
 [default]
 aws_access_key_id=xxxx
 aws_secret_access_key=xxxx
 ```
-and the provider definition contains the following directive reference the credentials file:
+and the provider definition contains the following directive referencing the credentials file:
 
 ```
   shared_credentials_file = "redhat-credentials.ini"
 ```
 
-When using different credentials files for each provider it is important to make sure that the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** are not defined in the session, otherwise extraneus errors will appear when running terraform.
+When using credentials files it is important to make sure that the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** are not defined in the session, otherwise extraneus errors will appear when running terraform.
 
 Six subnets are created to leverage the High Availavility provided by the Availability Zones in the region, 3 for public subnets, 3 for private subnets.
 
@@ -107,21 +102,36 @@ Three load balancers are created:
 
 The load balancers are of type **aws_elb**.- This _classic_ load balancer allows the use of security groups, does not need an x509 certificate to terminate the SSL/TLS connections; allows the definition of a TCP port to listen to and to forward the requests to the EC2 instances downstream.  The subnets where the load balancer will be placed, listening for requests is also defined, along the instances that will receive the requests. Cross zone load balanzing will be enable because the VMs being access are in differente availability zones. The load balancer will be internal or not depending on who will be using it.  Finally a health check against the EC2 instances is defined to verify if they can accept requests.
 
+#### DNS Route 53
+
+Two DNS zones are created to resolve the names of components in the cluster: one external to be accessable from the Internet, and one internal to be only accessable from inside the cluster.  Both zones are created under **rhce.support** domain.
+
+A few records have been created so far.
+
+* In the external zone:
+
+  * bastion
+  * master.- for the external load balancer
+  * *.apps.- for the applications domain
+
+* In the internal zone 
+
+  * master.- for the internal load balancer
+  * *.apps.- for the applications domain
+  
 
 ### Ansible
 
 To run an ansible playbook against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. For this a configuratin file is created **ssh.cfg** that defines a block with the connection parameters for the bastion host, and another one for the connection to the rest of the hosts in the VPC.
 
 ```
-Host bastion.taletoul.com
-  Hostname                bastion.taletoul.com
+Host bastion.ocpext.rhcee.support 
   user                    ec2-user
   StrictHostKeyChecking   no
   ProxyCommand            none
   CheckHostIP             no
   ForwardAgent            yes
   IdentityFile            ./tale-toul.pem
-
 ```
 
 To connect to the bastion host the name **bastion.taletoul.com** must be used so the configuration block is applied.  This configuration defines the FQDN of the host to connect to; the remote user to connect as; remote host's key will not be checked; no proxy command is used; key checking is against hostname rather than IP; ssh connection forwarding is enabled so a key managed by ssh agent can be used from this host to connect to another one; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
@@ -138,7 +148,7 @@ To connect to other hosts in the VPC, which are in private networks and therefor
 ```
 Host *.eu-west-1.compute.internal
   StrictHostKeyChecking   no
-  ProxyCommand            ssh ec2-user@bastion.taletoul.com -W %h:%p
+  ProxyCommand            ssh ec2-user@bastion.ocpext.rhcee.support -W %h:%p
   user                    ec2-user
   IdentityFile            ./tale-toul.pem
 ```

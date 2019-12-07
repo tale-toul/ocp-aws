@@ -2,13 +2,15 @@
 
 TERRAFORM_STATE=../Terraform/terraform.tfstate
 
-echo -e "[bastion]\n bastion.taletoul.com"
+echo -e "[bastion]"
+terraform output -state=$TERRAFORM_STATE |grep bastion_dns_name|cut -d= -f2
 
 echo -e "[masters]"
 
 terraform output -state=$TERRAFORM_STATE|egrep 'master.+_name'|cut -d= -f2 
 
-echo -e "[nodes]\n bastion.taletoul.com"
+echo -e "[nodes]"
+terraform output -state=$TERRAFORM_STATE |grep bastion_dns_name|cut -d= -f2
 
 terraform output -state=$TERRAFORM_STATE |while read -r line
 do
