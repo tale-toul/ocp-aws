@@ -14,6 +14,89 @@ variable "cluster_name" {
   default = "ocp"
 }
 
+variable "master-instance-type" {
+  description = "Type of instance used for master nodes, define the hardware characteristics like memory, cpu, network capabilities"
+  type = string
+  default = "t3.xlarge"
+}
+
+variable "nodes-instance-type" {
+  description = "Type of instance used for infra and worker nodes, define the hardware characteristics like memory, cpu, network capabilities"
+  type = string
+  default = "m4.xlarge"
+}
+
+variable "user-data-masters" {
+  description = "User data for master instances"
+  type = string
+  default = <<-EOF
+       #cloud-config
+       cloud_config_modules:
+       - disk_setup
+       - mounts
+       - cc_write_files
+
+       write_files:
+       - content: |
+           STORAGE_DRIVER=overlay2
+           DEVS=/dev/nvme1n1
+           VG=dockervg
+           CONTAINER_ROOT_LV_NAME=dockerlv
+           CONTAINER_ROOT_LV_MOUNT_PATH=/var/lib/docker
+           CONTAINER_ROOT_LV_SIZE=100%FREE
+         path: "/etc/sysconfig/docker-storage-setup"
+         permissions: "0644"
+         owner: "root"
+
+       fs_setup:
+       - label: ocp_emptydir
+         filesystem: xfs
+         device: /dev/nvme2n1
+         partition: auto
+       - label: etcd
+         filesystem: xfs
+         device: /dev/nvme3n1
+         partition: auto
+
+       mounts:
+       - [ "LABEL=ocp_emptydir", "/var/lib/origin/openshift.local.volumes", xfs, "defaults,gquota" ]
+       - [ "LABEL=etcd", "/var/lib/etcd", xfs, "defaults,gquota" ]
+  EOF
+}
+
+variable "user-data-nodes" {
+  description = "User data for worker and infra nodes instances"
+  type = string
+  default = <<-EOF
+       #cloud-config
+       cloud_config_modules:
+       - disk_setup
+       - mounts
+       - cc_write_files
+
+       write_files:
+       - content: |
+           STORAGE_DRIVER=overlay2
+           DEVS=/dev/xvdb
+           VG=dockervg
+           CONTAINER_ROOT_LV_NAME=dockerlv
+           CONTAINER_ROOT_LV_MOUNT_PATH=/var/lib/docker
+           CONTAINER_ROOT_LV_SIZE=100%FREE
+         path: "/etc/sysconfig/docker-storage-setup"
+         permissions: "0644"
+         owner: "root"
+
+       fs_setup:
+       - label: ocp_emptydir
+         filesystem: xfs
+         device: /dev/xvdc
+         partition: auto
+
+       mounts:
+       - [ "LABEL=ocp_emptydir", "/var/lib/origin/openshift.local.volumes", xfs, "defaults,gquota" ]
+  EOF
+}
+
 #VPC
 resource "aws_vpc" "vpc" {
     cidr_block = "172.20.0.0/16"
@@ -364,6 +447,13 @@ resource "aws_security_group" "sg-master" {
     }
 
     ingress {
+        from_port = 2379
+        to_port = 2380
+        protocol = "tcp"
+        security_groups = [aws_security_group.sg-node.id]
+    }
+
+    ingress {
         from_port = 443
         to_port = 443
         protocol = "tcp"
@@ -584,11 +674,16 @@ resource "aws_elb" "elb-infra-public" {
 #Bastion host
 resource "aws_instance" "tale_bastion" {
   ami = "ami-0404b890c57861c2d"
-  instance_type = "t2.small"
+  instance_type = "t2.medium"
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+
+  root_block_device {
+      volume_size = 25
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "bastion"
@@ -599,18 +694,34 @@ resource "aws_instance" "tale_bastion" {
 #Masters
 resource "aws_instance" "tale_mast01" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-master.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-masters 
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 60
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdd"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "master01"
@@ -620,18 +731,34 @@ resource "aws_instance" "tale_mast01" {
 
 resource "aws_instance" "tale_mast02" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-master.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-masters 
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 60
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdd"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "master02"
@@ -641,18 +768,34 @@ resource "aws_instance" "tale_mast02" {
 
 resource "aws_instance" "tale_mast03" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-master.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-masters 
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 60
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdd"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "master03"
@@ -660,20 +803,32 @@ resource "aws_instance" "tale_mast03" {
   }
 }
 
+#Infras
 resource "aws_instance" "tale_infra01" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-web-in.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-nodes
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 30
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "infra01"
@@ -683,18 +838,29 @@ resource "aws_instance" "tale_infra01" {
 
 resource "aws_instance" "tale_infra02" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-web-in.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-nodes
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 30
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "infra02"
@@ -703,18 +869,29 @@ resource "aws_instance" "tale_infra02" {
 }
 resource "aws_instance" "tale_infra03" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-web-in.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-nodes
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 30
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "infra03"
@@ -722,19 +899,31 @@ resource "aws_instance" "tale_infra03" {
   }
 }
 
+#Workers
 resource "aws_instance" "tale_worker01" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-nodes
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 30
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "worker01"
@@ -744,17 +933,28 @@ resource "aws_instance" "tale_worker01" {
 
 resource "aws_instance" "tale_worker02" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-nodes
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 30
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "worker02"
@@ -764,17 +964,28 @@ resource "aws_instance" "tale_worker02" {
 
 resource "aws_instance" "tale_worker03" {
   ami = "ami-0404b890c57861c2d"
-#  instance_type = "m4.large"
-  instance_type = "t2.small"
+  instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
+                            aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
   key_name= "tale-toul"
+  user_data = var.user-data-nodes
 
-#  root_block_device {
-#      volume_size = 20
-#      delete_on_termination = true
-#  }
+  root_block_device {
+      volume_size = 30
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdb"
+      volume_size = 80
+      delete_on_termination = true
+  }
+  ebs_block_device {
+      device_name = "/dev/xvdc"
+      volume_size = 80
+      delete_on_termination = true
+  }
 
   tags = {
         Name = "worker03"

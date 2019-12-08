@@ -1,0 +1,23 @@
+---
+- name: Set up docker on all nodes and verifies it works
+  hosts: all
+
+  tasks:
+    - name: Install docker packages
+      yum:
+         name: 
+          - docker
+          - docker-python
+         state: latest
+    - name: Start docker service
+      service:
+        name: docker
+        state: started
+    - name: Run a test container
+      docker_container:
+        name: ubi7
+        state: started
+        image: registry.access.redhat.com/ubi7/ubi
+        command: sh -c 'while true; do date;sleep 0.2;done'
+        auto_remove: true
+...
