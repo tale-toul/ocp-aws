@@ -29,8 +29,20 @@ Six subnets are created to leverage the High Availavility provided by the Availa
 
 ####EC2 instances
 
-The AWS base ami that will be used to deploy the hosts is based on RHEL 7.7.
-To look for the AWS amis the following command can be used.  The aws CLI binary needs to be available, the authentication to AWS can be completed exporting the variables **AWS_ACCESS_KEY_ID** and **AWS_SECRET_ACCESS_KEY**:
+A total of 10 EC2 instances are created.  Masters and workers have 4 vCPUs and 16GB of RAM, bastion host has 2 vCPUS and 4GB of RAM:
+
+* 1 bastion host deployed in one of the public subnets
+
+* 3 master nodes, each one deployed in one private subnet hence in an availability zone. 
+
+* 3 infra nodes, each one deployed in one private subnet hence in an availability zone.
+
+* 3 worker nodes, each one deployed in one private subnet hence in an availability zone.
+
+The bastion host is assigned an Elastic IP, and a corresponding DNS entry is created for that IP.  The A record is created in a different AWS account, so a specific provider is used for the Route53 DNS configuration.
+
+
+The AWS ami that used to deploy the hosts is based on RHEL 7.7.  To look for the AWS amis the following command can be used.  The aws CLI binary needs to be available, the authentication to AWS can be completed exporting the variables **AWS_ACCESS_KEY_ID** and **AWS_SECRET_ACCESS_KEY**:
 
 ```
 $ export AWS_ACCESS_KEY_ID=xxxxxx
@@ -39,25 +51,15 @@ $ aws ec2 describe-images --owners 309956199498 --filters "Name=is-public,Values
 ```
 The command searches for **public** amis in the eu-west-1 (Ireland) region with owner Red Hat (309956199498) that include in the name the string "RHEL*7.7*".  The output will contain a list of amis released at different dates and with minor differences among them.
 
+According to the [OpenShift installation documentation](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#hardware) a minimum available disk space is required in the partitions containing specific directories, also docker and OpenShift require available space to store ephemeral data and images, and in the case of the masters a separate disk is recommended to hold the data for etcd.  To comply with the previous requirements the root disk for the nodes is sized accordingly and additinal disks are added to the each master, infra and worker instance.  The additional disks are formated and mounted via a user data script that is passed to the instance during creation, one of the disks is used to create a volume group and logical volume to be used by docker.  It is important to take into consideration that the naming scheme for the devices created for the additional disks depends on the type of instance used; for example t3.xlarge will use devices like /devnvme1n1, while m4.xlarge will use /dev/xvdb
+
 The EC2 VMs created in the private networks need access to the Internet to donwload packages and images, so 3 NAT gateways are created, one for every private subnet.
 
 One Internet Gateway is created in the VPC to provide access from and to the Internet for the resources created in the public subnets. For this access to be enable, a single route table is created and associated to every public subnet.
 
-A total of 10 EC2 instances are created:
-
-* 1 bastion host deployed in one of the public subnets
-
-* 3 master nodes, each one deployed in one private subnet hence in an availability zone.
-
-* 3 infra nodes, each one deployed in one private subnet hence in an availability zone.
-
-* 3 worker nodes, each one deployed in one private subnet hence in an availability zone.
-
-The bastion host is assigned an Elastic IP, and a corresponding DNS entry is created for that IP.  The A record is created in a different AWS account, so a specific provider is used for the Route53 DNS configuration.
+#### Security Groups
 
 The EC2 instances need the right security group assigned depending on the particular role of the instace.
-
-#### Security Groups
 
 According to Terraform [documentation](https://www.terraform.io/docs/providers/aws/r/security_group.html):
 By default, AWS creates an ALLOW ALL egress rule when creating a new Security Group inside of a VPC. Terraform will remove this default rule, and require you specifically re-create it if you desire that rule. We feel this leads to fewer surprises in terms of controlling your egress rules. If you desire this rule to be in place, you can use this egress block:
@@ -208,12 +210,15 @@ $ ansible-playbook --vault-id vault_id.txt prereqs-ocp.yml
 
 ####Tests
 
-A directory called _tests_ within the Ansible directory is created to hold test playbooks to verify that the infrastructure works as expected:
+A directory called _tests_ inside the Ansible directory is created to hold test playbooks to verify that the infrastructure works as expected:
 
 Before running any of these playbooks the prereqs-ocp.yml playbook must be run.
 
 * **http-test.yaml**.- This playbooks is run agains the nodes group but only applies to those with the variable openshift_node_group_name defined and either with value node-config-master or node-config-infra; installs an httpd server; copies a configuration file to set up an SSL virtual host using a locally generated self signed x509 certificate, with document root at **/var/www/html**. A very simple index.html is added to the Document root containing the hostname of the node so when the connection is tested we know which node we hit, an additional copy of the file with name healthz is created to make the health check of the AWS load balancers happy.  As a final step the httpd service is restarted.  Once the playbook is run, we can use a command like the following to access the web servers through the external load balancer:
 
-`` 
+'`` 
 $ while true; do curl -k https://elb-master-public-697013167.eu-west-1.elb.amazonaws.com/; sleep 1; done
-`` 
+'`` 
+
+* **docker-test.yaml**.- This playbook is run against all nodes, including the bastion, install docker packages, starts the docker service, and runs a container.  
+
