@@ -2,16 +2,28 @@
 #https://www.terraform.io/docs/configuration/providers.html#alias-multiple-provider-instances
 #https://www.terraform.io/docs/providers/aws/index.html
 provider "aws" {
-  region = "eu-west-1"
+  region = var.region_name
   version = "~> 2.39"
   shared_credentials_file = "redhat-credentials.ini"
 }
 
 #VARIABLES
+variable "region_name" {
+  description = "AWS Region where the cluster is deployed"
+  type = string
+  default = "eu-west-1"
+}
+
 variable "cluster_name" {
   description = "Cluser name, used for prefixing some component names like the DNS domain"
   type = string
   default = "ocp"
+}
+
+variable "dns_domain" {
+  description = "Internet facing DNS domain used in this cluster"
+  type = string
+  default = "rhcee.support"
 }
 
 variable "master-instance-type" {
@@ -101,11 +113,22 @@ variable "user-data-nodes" {
 resource "aws_vpc" "vpc" {
     cidr_block = "172.20.0.0/16"
     enable_dns_hostnames = true
+    enable_dns_support = true
 
     tags = {
         Name = "volatil"
         Project = "OCP-CAM"
     }
+}
+
+resource "aws_vpc_dhcp_options" "vpc-options" {
+  domain_name          = "${var.region_name}.compute.internal"
+  domain_name_servers  = ["AmazonProvidedDNS"] 
+}
+
+resource "aws_vpc_dhcp_options_association" "vpc-association" {
+  vpc_id          = aws_vpc.vpc.id
+  dhcp_options_id = aws_vpc_dhcp_options.vpc-options.id
 }
 
 #SUBNETS
@@ -994,16 +1017,14 @@ resource "aws_instance" "tale_worker03" {
 }
 
 #ROUTE53 CONFIG
-
 #Datasource for rhcee.support. route53 zone
 data "aws_route53_zone" "rhcee" {
   zone_id = "Z1UPG9G4YY4YK6"
 }
 
-
 #External hosted zone, this is a public zone because it is not associated with a VPC
 resource "aws_route53_zone" "external" {
-  name = "${var.cluster_name}ext.rhcee.support."
+  name = "${var.cluster_name}ext.${var.dns_domain}."
 
   tags = {
     Name = "external"
@@ -1013,7 +1034,7 @@ resource "aws_route53_zone" "external" {
 
 resource "aws_route53_record" "external-ns" {
   zone_id = data.aws_route53_zone.rhcee.zone_id
-  name    = "${var.cluster_name}ext.rhcee.support."
+  name    = "${var.cluster_name}ext.${var.dns_domain}."
   type    = "NS"
   ttl     = "30"
 
@@ -1027,7 +1048,7 @@ resource "aws_route53_record" "external-ns" {
 
 #Internal hosted zone, this is a private zone because it is associated with a VPC
 resource "aws_route53_zone" "internal" {
-  name = "${var.cluster_name}int.rhcee.support."
+  name = "${var.cluster_name}int.${var.dns_domain}."
 
   vpc {
     vpc_id = aws_vpc.vpc.id
@@ -1076,6 +1097,124 @@ resource "aws_route53_record" "master-int" {
     type = "CNAME"
     ttl = "300"
     records =[aws_elb.elb-master-private.dns_name]
+}
+
+#S3 BUCKETS
+#Registry Bucket
+resource "aws_s3_bucket" "registry-bucket" {
+  bucket = "registry-tale-bucket"
+  region = var.region_name
+  acl    = "private"
+
+  tags = {
+    Name  = "Registry bucket"
+    Project = "OCP-CAM"
+  }
+}
+
+#IAM users
+#Admin user for aws OpenShift plugin
+resource "aws_iam_user" "iam-admin" {
+  name = "iam-admin"
+
+   tags = {
+    Name = "iam-admin"
+    Project = "OCP-CAM"
+  }
+}
+
+resource "aws_iam_access_key" "key-admin" {
+  user    = aws_iam_user.iam-admin.name
+}
+
+resource "aws_iam_user_policy" "policy-admin" {
+  name = "policy-admin"
+  user = aws_iam_user.iam-admin.name
+
+  policy = <<EOF
+{
+   "Version": "2012-10-17",
+   "Statement": [
+       {
+           "Action": [
+               "ec2:DescribeVolume*",
+               "ec2:CreateVolume",
+               "ec2:CreateTags",
+               "ec2:DescribeInstances",
+               "ec2:AttachVolume",
+               "ec2:DetachVolume",
+               "ec2:DeleteVolume",
+               "ec2:DescribeSubnets",
+               "ec2:CreateSecurityGroup",
+               "ec2:DescribeSecurityGroups",
+               "ec2:DescribeRouteTables",
+               "ec2:AuthorizeSecurityGroupIngress",
+               "ec2:RevokeSecurityGroupIngress",
+               "elasticloadbalancing:DescribeTags",
+               "elasticloadbalancing:CreateLoadBalancerListeners",
+               "elasticloadbalancing:ConfigureHealthCheck",
+               "elasticloadbalancing:DeleteLoadBalancerListeners",
+               "elasticloadbalancing:RegisterInstancesWithLoadBalancer",
+               "elasticloadbalancing:DescribeLoadBalancers",
+               "elasticloadbalancing:CreateLoadBalancer",
+               "elasticloadbalancing:DeleteLoadBalancer",
+               "elasticloadbalancing:ModifyLoadBalancerAttributes",
+               "elasticloadbalancing:DescribeLoadBalancerAttributes"
+           ],
+           "Resource": "*",
+           "Effect": "Allow",
+           "Sid": "1"
+       }
+   ]
+}
+ EOF
+}
+
+#Registry user for S3 bucket access
+resource "aws_iam_user" "iam-registry" {
+  name = "iam-registry"
+
+   tags = {
+    Name = "iam-registry"
+    Project = "OCP-CAM"
+  }
+}
+
+resource "aws_iam_access_key" "key-registry" {
+  user    = aws_iam_user.iam-registry.name
+}
+
+resource "aws_iam_user_policy" "policy-registry" {
+  name = "policy-registry"
+  user = aws_iam_user.iam-registry.name
+
+  policy = <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:ListBucket",
+        "s3:GetBucketLocation",
+        "s3:ListBucketMultipartUploads"
+      ],
+      "Resource": "arn:aws:s3:::registry-tale-bucket"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject",
+        "s3:ListMultipartUploadParts",
+        "s3:AbortMultipartUpload"
+      ],
+      "Resource": "arn:aws:s3:::registry-tale-bucket/*"
+    }
+  ]
+}
+EOF
 }
 
 #OUTPUT
@@ -1162,4 +1301,24 @@ output "worker03_name" {
 output "master_public_lb" {
   value = aws_route53_record.master-ext.fqdn
   description = "The DNS name of the public load balancer in front of masters"
+}
+output "iam_admin_key_id" {
+  value = aws_iam_access_key.key-admin.id
+  description = "ID of admin key"
+}
+output "iam_admin_key" {
+  value = aws_iam_access_key.key-admin.secret
+  description = "Secret key for the iam user admin"
+}
+output "iam_registry_key_id" {
+  value = aws_iam_access_key.key-registry.id
+  description = "ID of registry key"
+}
+output "iam_registry_key" {
+  value = aws_iam_access_key.key-registry.secret
+  description = "Secret key for the iam user registry"
+}
+output "iam_admin_encrypted_key" {
+  value = aws_iam_access_key.key-admin.encrypted_secret
+  description = "Encrypted secret key for the iam user admin"
 }

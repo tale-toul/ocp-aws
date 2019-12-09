@@ -10,7 +10,7 @@ The Terraform directory contains the neccessary files to create the infrastructu
 
 The architecture used is based on the one descrived in [this reference document](https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf) from Red Hat.
 
-One provider is defined (https://www.terraform.io/docs/configuration/providers.html) to create the resources in AWS.  A credentials file is created with the following format:
+One provider is defined (https://www.terraform.io/docs/configuration/providers.html) to create the resources in AWS.  A credentials file containing the access key ID and the access key secret is created with the following format:
 
 ```
 [default]
@@ -25,7 +25,33 @@ and the provider definition contains the following directive referencing the cre
 
 When using credentials files it is important to make sure that the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** are not defined in the session, otherwise extraneus errors will appear when running terraform.
 
-Six subnets are created to leverage the High Availavility provided by the Availability Zones in the region, 3 for public subnets, 3 for private subnets.
+####Variables
+
+Some variables are defined at the beginning of the file to simplify the rest of the configuration, it is enough to modify its values to change the configuration of the infrastructure deployed by terraform:
+
+* **region_name**.- AWS region where the cluster is deployed
+
+* **cluster_name**.- Indentifier used for prefixing some component names like the DNS domain
+
+* **dns_domain**.- Internet facing DNS domain used in this cluster
+
+* **master-instance-type**.- Type of instance used for master nodes, define the hardware characteristics like memory, cpu, network capabilities
+
+* **nodes-instance-type**.- Type of instance used for infra and worker nodes, define the hardware characteristics like memory, cpu, network capabilities
+
+* **user-data-masters**.- User data for master instances, contains cloud config directives to setup disks and partitions.
+
+* **user-data-nodes**.- User data for worker and infra nodes instances, contains cloud config directives to setup disks and partitions.
+
+####VPC
+
+A single VPC is created where all resources will be placed, it has DNS support enable for the EC2 instances created inside, distributed by the DHCP server, and those instances will get a generated DNS name within the domain eu-west-1.compute.internal
+
+Six subnets are created to leverage the High Availavility provided by the Availability Zones in the region, 3 public subnets and 3 private ones.
+
+An internet gateway is created to provide access to and from the Internet.  For the EC2 instances in the public subnets to be able to use it, a route table is created with a default route pointing to the internet gateway, then an association is made between each public subnet and the route table.
+
+3 NAT gateways are created and placed one on each of the public subnets, they are used to provide access to the Inernet to the EC2 instances in the private subnets, this way those EC2 instances will be able to access the ouside world, for example to download images, but the outside world will not be able to access the EC2 instances.  An Elastic IP is created and assigned to each one of the NAT gateways.  For the EC2 instances in the private networks to be able to use the NAT gateways, 3 route tables are created with a default route pointing to one of the NAT gateways, then an association is made between one private subnet and the corresponding route table; in the end there will be a route table associated to each private subnet pointing to one of the NAT gateways.
 
 ####EC2 instances
 
@@ -76,8 +102,9 @@ egress {
 ```
 This _allow-all-out_ security group is assigned to most of the EC2 instances and load balancers.
 
-Quite a few security groups need to be created, I followed the documentation [here](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#required-ports) and [here](https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites)
-To add in Terraform the same security group that is being created as a source security group the option **self = true** muste be used:
+A few security groups need to be created, the ports that need to be accessable along the type of host that need to access them are described in the documentation [here](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#required-ports) and [here](https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites)
+
+To add the same security group that is being created as a source security group the option **self = true** muste be used, then any instance wich gets assigned the security group will be able to access the ports to of any other instance with the same security group assigned:
 
 ```
 resource "aws_security_group" "sg-master" {
@@ -87,6 +114,28 @@ resource "aws_security_group" "sg-master" {
         to_port = 2380
         protocol = "tcp"
         self = true
+    }
+```
+The other options to define the source that can use the ingress rule are:
+
+* A network CIDR address.  Any request coming from that network will be allowed:
+
+```
+     ingress {
+        from_port = 443
+        to_port = 443
+        protocol = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+     }
+```
+* Another security group.  In this case any request coming from an instance that has assigned any of the security groups will be allowed:
+
+```
+    ingress {
+        from_port = 2379
+        to_port = 2380
+        protocol = "tcp"
+        security_groups = [aws_security_group.sg-node.id]
     }
 ```
 
@@ -121,6 +170,19 @@ A few records have been created so far.
   * master.- for the internal load balancer
   * *.apps.- for the applications domain
   
+####S3 bucket
+
+An S3 bucket is created to be used as backend storage for the internal OpenShift image registry.  It is recommended to create the bucket in the same region as the rest of the resources.
+
+####IAM users
+
+Two IAM users are created to be used by the installation playbooks, and later by the cluster itself.  The policy definitions are created as "here" documents, it is **important** that the opening and closing curly brackets are placed on column 1 of the document, otherwise a malformed JSON error happens when running "terraform apply" command:
+
+* The first one (iam-admin) is to be associated with the EC2 instances and has a policy that allows it to operate on the EC2 instances and load balancers.
+
+* The second one (iam-registry) has a policy that allows it to manage the S3 bucket that is also created as part of this terraform definition.
+
+In the output section there are entries to print the access key ID and access key secret of these two IAM users, this information should be considered restricted.
 
 ### Ansible
 
