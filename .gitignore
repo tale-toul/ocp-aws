@@ -1,5 +1,6 @@
 .*.swp
 *.vimrc
+Terraform/.terraform
 Ansible/inventario
 Ansible/ansible.log
 Ansible/vault_id
