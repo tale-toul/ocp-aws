@@ -273,9 +273,21 @@ $ ansible all -m ping
 
 A playbook is created to apply some prerequisites in the cluster host.  The playbook is **prereqs-ocp.yml**.
 
-In the first play a single tasks run against the bastion host serves to puposes: make sure the bastion is accessed before the rest of the hosts in the private networks, and to change the hostname to bastion.taletoul.com
+In the first play a single task is run against the bastion host, it serves to puposes: 
 
-The sencond play subscribes all the hosts with Red Hat; enables the repositories needed to install Openshift.
+* Make sure the bastion is accessed before any of the other hosts in the private networks
+
+* Change the hostname to the one defined in the inventory file.
+
+The sencond play contains several tasks:
+
+* Find and Disable any repo file not manage by the subscription manager
+ 
+* Register nodes all the nodes with Red Hat
+
+* Enable the repositories needed to install Openshift.
+
+* Update operating system packages
 
 The username and password required to register the hosts with Red Hat are encrypted in a vault file.  the playbook must be run providing the password to unencrypt that file, for example by storing the password in a file and using the command:
 

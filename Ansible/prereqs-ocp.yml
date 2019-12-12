@@ -5,10 +5,19 @@
         - name: Assign a proper hostname to the server
           hostname:
               name: "{{ inventory_hostname }}"
+
 - name: Prerequisites for OCP cluster members
   hosts: all
-
   tasks:
+        - name: Find repo files
+          find:
+            paths: /etc/yum.repos.d
+            patterns: '*.repo'
+          register: repo_files
+        - name: Disable rhui repositories
+          command: mv {{ item.path }} {{ item.path }}.disabled
+          when: "'rhui' in item.path"
+          with_items: "{{ repo_files.files }}"
         - name: Register server with Red Hat
           redhat_subscription:
               state: present
