@@ -117,6 +117,7 @@ resource "aws_vpc" "vpc" {
 
     tags = {
         Name = "volatil"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -144,6 +145,7 @@ resource "aws_subnet" "subnet1" {
 
     tags = {
         Name = "subnet1"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -156,6 +158,7 @@ resource "aws_subnet" "subnet2" {
 
     tags = {
         Name = "subnet2"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -168,6 +171,7 @@ resource "aws_subnet" "subnet3" {
 
     tags = {
         Name = "subnet3"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -180,6 +184,7 @@ resource "aws_subnet" "subnet_priv1" {
 
     tags = {
         Name = "subnet_priv1"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -192,6 +197,7 @@ resource "aws_subnet" "subnet_priv2" {
 
     tags = {
         Name = "subnet_priv2"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -204,6 +210,7 @@ resource "aws_subnet" "subnet_priv3" {
 
     tags = {
         Name = "subnet_priv3"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -214,6 +221,7 @@ resource "aws_internet_gateway" "intergw" {
 
     tags = {
         Name = "intergw"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -223,6 +231,7 @@ resource "aws_eip" "nateip1" {
     vpc = true
     tags = {
         Name = "nateip1"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -231,6 +240,7 @@ resource "aws_eip" "nateip2" {
     vpc = true
     tags = {
         Name = "nateip2"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -239,6 +249,7 @@ resource "aws_eip" "nateip3" {
     vpc = true
     tags = {
         Name = "nateip3"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -249,6 +260,7 @@ resource "aws_eip" "bastion_eip" {
 
     tags = {
         Name = "bastion_eip"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -262,6 +274,7 @@ resource "aws_nat_gateway" "natgw1" {
 
     tags = {
         Name = "natgw1"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -274,6 +287,7 @@ resource "aws_nat_gateway" "natgw2" {
 
     tags = {
         Name = "natgw2"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -286,6 +300,7 @@ resource "aws_nat_gateway" "natgw3" {
 
     tags = {
         Name = "natgw3"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -301,6 +316,7 @@ resource "aws_route_table" "rtable_igw" {
     }
     tags = {
         Name = "rtable_igw"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -331,6 +347,7 @@ resource "aws_route_table" "rtable_priv1" {
     }
     tags = {
         Name = "rtable_priv1"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -344,6 +361,7 @@ resource "aws_route_table" "rtable_priv2" {
     }
     tags = {
         Name = "rtable_priv2"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -357,6 +375,7 @@ resource "aws_route_table" "rtable_priv3" {
     }
     tags = {
         Name = "rtable_priv3"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -392,6 +411,7 @@ resource "aws_security_group" "sg-ssh-in" {
 
     tags = {
         Name = "sg-ssh"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -410,6 +430,7 @@ resource "aws_security_group" "sg-all-out" {
 
     tags = {
         Name = "all-out"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -428,6 +449,7 @@ resource "aws_security_group" "sg-ssh-in-local" {
 
     tags = {
         Name = "sg-ssh-local"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -453,6 +475,7 @@ resource "aws_security_group" "sg-web-in" {
 
     tags = {
         Name = "sg-web-in"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -491,6 +514,7 @@ resource "aws_security_group" "sg-master" {
 
     tags = {
         Name = "sg-master"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -544,6 +568,7 @@ resource "aws_security_group" "sg-node" {
     }
     tags = {
         Name = "sg-node"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -569,6 +594,7 @@ resource "aws_security_group" "sg-web-out" {
 
     tags = {
         Name = "sg-web-out"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
@@ -612,6 +638,7 @@ resource "aws_elb" "elb-master-public" {
 
   tags = {
     Name = "lb-master-public"
+    Clusterid = var.cluster_name
     Project = "OCP-CAM"
   }
 }
@@ -647,6 +674,7 @@ resource "aws_elb" "elb-master-private" {
 
   tags = {
     Name = "lb-master-private"
+    Clusterid = var.cluster_name
     Project = "OCP-CAM"
   }
 }
@@ -689,6 +717,7 @@ resource "aws_elb" "elb-infra-public" {
 
   tags = {
     Name = "lb-infra-public"
+    Clusterid = var.cluster_name
     Project = "OCP-CAM"
   }
 }
@@ -710,6 +739,7 @@ resource "aws_instance" "tale_bastion" {
 
   tags = {
         Name = "bastion"
+        Clusterid = var.cluster_name
         Project = "OCP-CAM"
   }
 }
@@ -748,6 +778,8 @@ resource "aws_instance" "tale_mast01" {
 
   tags = {
         Name = "master01"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -785,6 +817,8 @@ resource "aws_instance" "tale_mast02" {
 
   tags = {
         Name = "master02"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -822,6 +856,8 @@ resource "aws_instance" "tale_mast03" {
 
   tags = {
         Name = "master03"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -855,6 +891,8 @@ resource "aws_instance" "tale_infra01" {
 
   tags = {
         Name = "infra01"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -887,6 +925,8 @@ resource "aws_instance" "tale_infra02" {
 
   tags = {
         Name = "infra02"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -918,6 +958,8 @@ resource "aws_instance" "tale_infra03" {
 
   tags = {
         Name = "infra03"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -950,6 +992,8 @@ resource "aws_instance" "tale_worker01" {
 
   tags = {
         Name = "worker01"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -981,6 +1025,8 @@ resource "aws_instance" "tale_worker02" {
 
   tags = {
         Name = "worker02"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -1012,6 +1058,8 @@ resource "aws_instance" "tale_worker03" {
 
   tags = {
         Name = "worker03"
+        Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
@@ -1028,6 +1076,7 @@ resource "aws_route53_zone" "external" {
 
   tags = {
     Name = "external"
+    Clusterid = var.cluster_name
     Project = "OCP-CAM"
   }
 }
@@ -1056,6 +1105,7 @@ resource "aws_route53_zone" "internal" {
 
   tags = {
     Name = "internal"
+    Clusterid = var.cluster_name
     Project = "OCP-CAM"
   }
 }
@@ -1108,6 +1158,7 @@ resource "aws_s3_bucket" "registry-bucket" {
 
   tags = {
     Name  = "Registry bucket"
+    Clusterid = var.cluster_name
     Project = "OCP-CAM"
   }
 }
@@ -1119,6 +1170,7 @@ resource "aws_iam_user" "iam-admin" {
 
    tags = {
     Name = "iam-admin"
+    Clusterid = var.cluster_name
     Project = "OCP-CAM"
   }
 }
@@ -1176,6 +1228,7 @@ resource "aws_iam_user" "iam-registry" {
 
    tags = {
     Name = "iam-registry"
+    Clusterid = var.cluster_name
     Project = "OCP-CAM"
   }
 }

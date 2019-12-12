@@ -1,8 +1,10 @@
 ## Openshift 3.11 installation on AWS
 
-#REFERENCE DOCUMENTATION
-#https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites
-#https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf
+### Reference documentation
+
+https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites
+
+https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf
 
 ### Terraform
 
@@ -25,7 +27,18 @@ and the provider definition contains the following directive referencing the cre
 
 When using credentials files it is important to make sure that the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** are not defined in the session, otherwise extraneus errors will appear when running terraform.
 
-####Variables
+Most of the resources created in AWS to deploy the OCP cluster require the tag named **Clusterid** with an identifier common to all elements. In this case the value of the tag is defined via a variable:
+
+```
+Clusterid = var.cluster_name
+```
+In addition to the tag Clusterid, the EC2 instances also require the following tag, the tag name includes the value used for Clusterid, and the value can be owned or shared, depending on the cluster use, if it is only for OCP we use owned, if the nodes have other uses we use shared:
+
+```
+"kubernetes.io/cluster/${var.cluster_name}" = "owned"
+```
+
+#### Variables
 
 Some variables are defined at the beginning of the file to simplify the rest of the configuration, it is enough to modify its values to change the configuration of the infrastructure deployed by terraform:
 
@@ -43,7 +56,7 @@ Some variables are defined at the beginning of the file to simplify the rest of 
 
 * **user-data-nodes**.- User data for worker and infra nodes instances, contains cloud config directives to setup disks and partitions.
 
-####VPC
+#### VPC
 
 A single VPC is created where all resources will be placed, it has DNS support enable for the EC2 instances created inside, distributed by the DHCP server, and those instances will get a generated DNS name within the domain eu-west-1.compute.internal
 
@@ -53,7 +66,7 @@ An internet gateway is created to provide access to and from the Internet.  For 
 
 3 NAT gateways are created and placed one on each of the public subnets, they are used to provide access to the Inernet to the EC2 instances in the private subnets, this way those EC2 instances will be able to access the ouside world, for example to download images, but the outside world will not be able to access the EC2 instances.  An Elastic IP is created and assigned to each one of the NAT gateways.  For the EC2 instances in the private networks to be able to use the NAT gateways, 3 route tables are created with a default route pointing to one of the NAT gateways, then an association is made between one private subnet and the corresponding route table; in the end there will be a route table associated to each private subnet pointing to one of the NAT gateways.
 
-####EC2 instances
+#### EC2 instances
 
 A total of 10 EC2 instances are created.  Masters and workers have 4 vCPUs and 16GB of RAM, bastion host has 2 vCPUS and 4GB of RAM:
 
@@ -170,11 +183,11 @@ A few records have been created so far.
   * master.- for the internal load balancer
   * *.apps.- for the applications domain
   
-####S3 bucket
+#### S3 bucket
 
 An S3 bucket is created to be used as backend storage for the internal OpenShift image registry.  It is recommended to create the bucket in the same region as the rest of the resources.
 
-####IAM users
+#### IAM users
 
 Two IAM users are created to be used by the installation playbooks, and later by the cluster itself.  The policy definitions are created as "here" documents, it is **important** that the opening and closing curly brackets are placed on column 1 of the document, otherwise a malformed JSON error happens when running "terraform apply" command:
 
@@ -256,7 +269,7 @@ And a ping is sent to all hosts:
 $ ansible all -m ping 
 ```
 
-####Prerequisites
+#### Prerequisites
 
 A playbook is created to apply some prerequisites in the cluster host.  The playbook is **prereqs-ocp.yml**.
 
@@ -270,7 +283,7 @@ The username and password required to register the hosts with Red Hat are encryp
 $ ansible-playbook --vault-id vault_id.txt prereqs-ocp.yml
 ```
 
-####Tests
+#### Tests
 
 A directory called _tests_ inside the Ansible directory is created to hold test playbooks to verify that the infrastructure works as expected:
 
