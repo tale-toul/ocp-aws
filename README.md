@@ -313,3 +313,6 @@ $ while true; do curl -k https://elb-master-public-697013167.eu-west-1.elb.amazo
 
 * **docker-test.yaml**.- This playbook is run against all nodes, including the bastion, install docker packages, starts the docker service, and runs a container.  
 
+### Installation
+
+Create a credentials file for the Terraform provider in the Terraform direcotry, as defined in the main.tf file, see the [Terraform section](#terraform) of this document.
