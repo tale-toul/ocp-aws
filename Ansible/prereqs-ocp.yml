@@ -5,6 +5,13 @@
         - name: Assign a proper hostname to the server
           hostname:
               name: "{{ inventory_hostname }}"
+        - name: Install base packages
+              yum:
+                state: latest
+                name:
+                  - openshift-ansible
+                  - vim
+                  - screen 
 
 - name: Prerequisites for OCP cluster members
   hosts: all
@@ -33,8 +40,9 @@
                 - rhel-7-fast-datapath-rpms
                 - rhel-7-server-ansible-2.6-rpms
               purge: True
-#        - name: Update system packages
-#          yum:
-#              state: latest
-#              name: '*'
+        - name: Update system packages
+          yum:
+              state: latest
+              name: '*'
+          when: update_packages
 ...

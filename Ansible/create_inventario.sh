@@ -2,16 +2,15 @@
 
 TERRAFORM_STATE=../Terraform/terraform.tfstate
 
-echo -e "[bastion]"
+echo -e "\n[bastion]"
 terraform output -state=$TERRAFORM_STATE |grep bastion_dns_name|cut -d= -f2
 
-echo -e "[masters]"
-
+echo -e "\n[masters]"
 terraform output -state=$TERRAFORM_STATE|egrep 'master.+_name'|cut -d= -f2 
 
-echo -e "[nodes]"
-terraform output -state=$TERRAFORM_STATE |grep bastion_dns_name|cut -d= -f2
+echo -e "\n[etcd]\n\n[etcd:children]\n masters"
 
+echo -e "\n[nodes]"
 terraform output -state=$TERRAFORM_STATE |while read -r line
 do
   if (echo $line|egrep 'master.+_name') >/dev/null; then

@@ -263,7 +263,7 @@ The default log file for ansible will be **ansible.log**
 
 To verify that the configuration is correct and all node are accesble via ansible, an inventory file is created after deploying the terraform infrastructure using a script called **create_inventario.sh**
 
-And a ping is sent to all hosts:
+A ping is sent to all hosts to check they are reachable:
 
 ```
 $ ansible all -m ping 
@@ -273,11 +273,15 @@ $ ansible all -m ping
 
 A playbook is created to apply some prerequisites in the cluster host.  The playbook is **prereqs-ocp.yml**.
 
-In the first play a single task is run against the bastion host, it serves to puposes: 
+In the first play the tasks are run against the bastion host, it serves to puposes: 
 
 * Make sure the bastion is accessed before any of the other hosts in the private networks
 
-* Change the hostname to the one defined in the inventory file.
+* Apply changes specific to the bastion host:
+
+  * Change the hostname to the one defined in the inventory file.
+
+  * Install some required packages like openshift-ansible.
 
 The sencond play contains several tasks:
 
@@ -287,7 +291,7 @@ The sencond play contains several tasks:
 
 * Enable the repositories needed to install Openshift.
 
-* Update operating system packages
+* Update operating system packages, only when the variable update_packages have been defined as true, the default value is false.
 
 The username and password required to register the hosts with Red Hat are encrypted in a vault file.  the playbook must be run providing the password to unencrypt that file, for example by storing the password in a file and using the command:
 

@@ -1353,7 +1353,11 @@ output "worker03_name" {
 }
 output "master_public_lb" {
   value = aws_route53_record.master-ext.fqdn
-  description = "The DNS name of the public load balancer in front of masters"
+  description = "The DNS name of the public load balancer in front of the masters"
+}
+output "master_internal_lb" {
+  value = aws_route53_record.master-int.fqdn
+  description = "The DNS name of the internal load balancer in front of the masters"
 }
 output "iam_admin_key_id" {
   value = aws_iam_access_key.key-admin.id
@@ -1374,4 +1378,8 @@ output "iam_registry_key" {
 output "iam_admin_encrypted_key" {
   value = aws_iam_access_key.key-admin.encrypted_secret
   description = "Encrypted secret key for the iam user admin"
+}
+output "registry_s3_bucket" {
+  value = aws_s3_bucket.registry-bucket.arn
+  description = "ARN value for the registry S3 bucket"
 }
