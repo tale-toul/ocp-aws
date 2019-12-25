@@ -1,0 +1,15 @@
+Host *
+  ForwardAgent yes
+Host {{ bastion_dns_name }}
+  user                    ec2-user
+  StrictHostKeyChecking   no
+  ProxyCommand            none
+  CheckHostIP             no
+  ForwardAgent            yes
+  IdentityFile            ../Terraform/{{ ssh_key | regex_replace('(.*)\.pub', '\\1') }}
+
+Host *.{{ aws_internal_domain }} 
+  StrictHostKeyChecking   no
+  ProxyCommand            ssh ec2-user@{{ bastion_dns_name }} -W %h:%p
+  user                    ec2-user
+  IdentityFile            ../Terraform/{{ ssh_key | regex_replace('(.*)\.pub', '\\1') }}

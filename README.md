@@ -52,6 +52,10 @@ Some variables are defined at the beginning of the file to simplify the rest of 
 
 * **nodes-instance-type**.- Type of instance used for infra and worker nodes, define the hardware characteristics like memory, cpu, network capabilities
 
+* **rhel7-ami**.- AMI on which the EC2 instances are based on, this one is a RHEL 7.7 in the Ireland region.  This variable is region dependent, if the value of variable **region_name** is modified, this one must be updated too.
+
+* **ssh-keyfile**.- Name of the file with public part of the SSH key to transfer to the EC2 instances
+
 * **user-data-masters**.- User data for master instances, contains cloud config directives to setup disks and partitions.
 
 * **user-data-nodes**.- User data for worker and infra nodes instances, contains cloud config directives to setup disks and partitions.
@@ -78,8 +82,7 @@ A total of 10 EC2 instances are created.  Masters and workers have 4 vCPUs and 1
 
 * 3 worker nodes, each one deployed in one private subnet hence in an availability zone.
 
-The bastion host is assigned an Elastic IP, and a corresponding DNS entry is created for that IP.  The A record is created in a different AWS account, so a specific provider is used for the Route53 DNS configuration.
-
+The bastion host is assigned an Elastic IP, and a corresponding DNS entry is created for that IP.  
 
 The AWS ami that used to deploy the hosts is based on RHEL 7.7.  To look for the AWS amis the following command can be used.  The aws CLI binary needs to be available, the authentication to AWS can be completed exporting the variables **AWS_ACCESS_KEY_ID** and **AWS_SECRET_ACCESS_KEY**:
 
@@ -91,6 +94,15 @@ $ aws ec2 describe-images --owners 309956199498 --filters "Name=is-public,Values
 The command searches for **public** amis in the eu-west-1 (Ireland) region with owner Red Hat (309956199498) that include in the name the string "RHEL*7.7*".  The output will contain a list of amis released at different dates and with minor differences among them.
 
 According to the [OpenShift installation documentation](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#hardware) a minimum available disk space is required in the partitions containing specific directories, also docker and OpenShift require available space to store ephemeral data and images, and in the case of the masters a separate disk is recommended to hold the data for etcd.  To comply with the previous requirements the root disk for the nodes is sized accordingly and additinal disks are added to the each master, infra and worker instance.  The additional disks are formated and mounted via a user data script that is passed to the instance during creation, one of the disks is used to create a volume group and logical volume to be used by docker.  It is important to take into consideration that the naming scheme for the devices created for the additional disks depends on the type of instance used; for example t3.xlarge will use devices like /devnvme1n1, while m4.xlarge will use /dev/xvdb
+
+An SSH key pair is created so the public part can be distributed to the EC2 instances and ssh access is posible. The key pair can be created in the AWS web interface or using a commnad like:
+
+```
+$ ssh-keygen -o -t rsa -f ocp-ssh -N ""
+```
+The previous command generates 2 files: ocp-ssh with the private part of the key, and ocp-ssh.pub with the public part of the key.  The private part is not protected by a passphrase (-N "")
+
+An SSH key pair resource is created based on the ssh key created in the previous step.
 
 The EC2 VMs created in the private networks need access to the Internet to donwload packages and images, so 3 NAT gateways are created, one for every private subnet.
 
@@ -199,7 +211,7 @@ In the output section there are entries to print the access key ID and access ke
 
 ### Ansible
 
-To run an ansible playbook against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. For this a configuratin file is created **ssh.cfg** that defines a block with the connection parameters for the bastion host, and another one for the connection to the rest of the hosts in the VPC.
+To run an ansible playbook against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. A configuration file **ssh.cfg** is created from a jinja2 template (ssh.cfg.j2), containing a block with the connection parameters for the bastion host, and a block for the connection to the rest of the hosts in the VPC.  The template is rendered in the prereqs-ocp.yml ansible playbook, using variables from the terraform output variables.
 
 ```
 Host bastion.ocpext.rhcee.support 
@@ -211,14 +223,13 @@ Host bastion.ocpext.rhcee.support
   IdentityFile            ./tale-toul.pem
 ```
 
-To connect to the bastion host the name **bastion.taletoul.com** must be used so the configuration block is applied.  This configuration defines the FQDN of the host to connect to; the remote user to connect as; remote host's key will not be checked; no proxy command is used; key checking is against hostname rather than IP; ssh connection forwarding is enabled so a key managed by ssh agent can be used from this host to connect to another one; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
+To connect to the bastion host the name **bastion.ocpext.rhcee.support** must be used so the configuration block is applied.  This configuration defines the FQDN of the host to connect to; the remote user to connect as; remote host's key will not be checked; no proxy command is used; key checking is against hostname rather than IP; ssh connection forwarding is enabled so a key managed by ssh agent can be used from this host to connect to another one; the file with the key used to connect to the remote host is defined to be on the same directory where the ssh command is run from.
 
-The command used to connect to the bastion host will be:
+The command used to connect to the bastion host would be.
 
 ```
 $ ssh -F ssh.cfg bastion.taletoul.com
 ```
-The ssh.cfg file is loaded from the command line.
 
 To connect to other hosts in the VPC, which are in private networks and therefore not directly accesible, the following configuration block is defined:
 
@@ -239,29 +250,47 @@ $ ssh-add tale-toul.pem
 $ ssh -F ssh.cfg ip-172-20-20-220.eu-west-1.compute.internal
 ```
 
-To apply this configuration to ansible the contents of the file must be added to one of the standar config files: /etc/ssh/ss_config or ~/.ssh/config
+To apply this configuration to ansible the following block is added to ansible.cfg:
 
 ```
-$ cat ssh_config >> ~/.ssh/config
+[ssh_connection]
+ssh_args = -F ./ssh.cfg
 ```
 
 When ansible is run for the first time after the hosts have been created the remote keys need to be accepted, even when using the option **host_key_checking=False** not to be bothered with that key validation.  When an indirect connection is stablished to the hosts in the private subnets the key validation happens both at the bastion host and at the final host, but ansible doesn't seem to be prepared for two question and the play hangs on the second question until a connection timeout is reached.
 
 To avoid this problem we have to make sure that a connection to the bastion host is stablished before going to the hosts in the private subnets, for that reason we have to make sure that we run a play against the bastion host before running another against the registry.
 
-A basic **ansible.cfg** configuration file is created with the following contents:
+An **ansible.cfg** configuration file is created with the following contents:
 
 ```
 [defaults]
 inventory=inventario
 host_key_checking=False
 log_path = ansible.log
+callback_whitelist = profile_tasks, timer
+
+[privilege_escalation]
+become=true
+become_user=root
+become_method=sudo
+
+[ssh_connection]
+ssh_args = -F ./ssh.cfg
 ```
+In the **default** section:
 The default inventory file that ansible will look for is called **inventario**
 No ssh key checking for the remote host will be performed
 The default log file for ansible will be **ansible.log**
+Time marks will be shown along the playbook execution
 
-To verify that the configuration is correct and all node are accesble via ansible, an inventory file is created after deploying the terraform infrastructure using a script called **create_inventario.sh**
+In the **privilege_escalation** section:
+All tasks will be run via sudo as root
+
+In the **ssh_connection** section:
+The ssh connections will use a specific configuration file
+
+To verify that the configuration is correct and all nodes are accesble via ansible, an inventory file is created after deploying the terraform infrastructure using a script called **create_inventario.sh**
 
 A ping is sent to all hosts to check they are reachable:
 
@@ -273,7 +302,11 @@ $ ansible all -m ping
 
 A playbook is created to apply some prerequisites in the cluster host.  The playbook is **prereqs-ocp.yml**.
 
-In the first play the tasks are run against the bastion host, it serves to puposes: 
+In the first play a single task is used to remove the stale ssh keys in the known_hosts file that belonged to previous EC2 instances with the same hostname as the one created by the last run of terraform. 
+
+The next play is run against the localhost. The first group of tasks creates a file with variables from terraform output, and loads them into ansible, finally the ssh jinja2 template is redered. 
+
+The next play is run against the bastion host, it serves to puposes: 
 
 * Make sure the bastion is accessed before any of the other hosts in the private networks
 
@@ -281,9 +314,7 @@ In the first play the tasks are run against the bastion host, it serves to pupos
 
   * Change the hostname to the one defined in the inventory file.
 
-  * Install some required packages like openshift-ansible.
-
-The sencond play contains several tasks:
+The next play contains several tasks:
 
 * Find and Disable any repo file not manage by the subscription manager
  
@@ -291,7 +322,9 @@ The sencond play contains several tasks:
 
 * Enable the repositories needed to install Openshift.
 
-* Update operating system packages, only when the variable update_packages have been defined as true, the default value is false.
+* Install some required packages like openshift-ansible.
+
+* Update operating system packages, only when the update_packages variable has been defined as true, the default value is false.
 
 The username and password required to register the hosts with Red Hat are encrypted in a vault file.  the playbook must be run providing the password to unencrypt that file, for example by storing the password in a file and using the command:
 
@@ -316,3 +349,27 @@ $ while true; do curl -k https://elb-master-public-697013167.eu-west-1.elb.amazo
 ### Installation
 
 Create a credentials file for the Terraform provider in the Terraform direcotry, as defined in the main.tf file, see the [Terraform section](#terraform) of this document.
+
+Select an AWS region to deploy the infrastructure on, by default the region is Ireland (eu-west-1), but it can be changed by assigning a value to the variable region_name, for example by passing the -var argument in the command line  `-var="region_name=eu-central-1"`
+
+Select the AMI to be used as base OS for the EC2 instances, by default this is a RHEL 7.7 in the Ireland region, if the region is changed, this value must also be changed accordingly, see the [EC2 instances section for details](#ec2).
+
+Create an SSH key pair with the following command, the terraform configuration expects the output files to be called ocp-ssh and ocp-ssh.pub:
+
+```
+$ ssh-keygen -o -t rsa -f ocp-ssh -N ""
+```
+
+Deploy the infrastructure by running a command like the following in the Terraform directory, in this case a specific region and AMI are selected:
+
+```
+$ terraform apply -var="region_name=eu-west-2" -var="rhel7-ami=ami-0fb2dd0b481d4dc1a"
+```
+
+Run the prerequisites (prereqs-ocp.yml ) playbook. If the OS packages are to be updated, the variable **update_packages** must be set to true, in this case a reboot of the nodes is probably required.
+
+
+```
+$ cd Ansible
+$ ansible-playbook  --vault-id vault_id prereqs-ocp.yml 
+```

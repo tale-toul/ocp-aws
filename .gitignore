@@ -1,12 +1,12 @@
 .*.swp
 *.vimrc
 Terraform/.terraform
+Terraform/ocp-ssh*
 Ansible/inventario
 Ansible/ansible.log
 Ansible/vault_id
-tale-toul.pem
+Ansible/group_vars/all/terraform_outputs.var
 *.tfstate
 *.tfstate.backup
 ocp-on-aws-8.pdf
 redhat-credentials.ini
-tale-credentials.ini

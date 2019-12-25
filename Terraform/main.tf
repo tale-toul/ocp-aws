@@ -38,6 +38,18 @@ variable "nodes-instance-type" {
   default = "m4.xlarge"
 }
 
+variable "rhel7-ami" {
+  description = "AMI on which the EC2 instances are based on, this one is a RHEL 7.7 in the Ireland region"
+  type = string
+  default = "ami-0404b890c57861c2d"
+}
+
+variable "ssh-keyfile" {
+  description = "Name of the file with public part of the SSH key to transfer to the EC2 instances"
+  type = string
+  default = "ocp-ssh.pub"
+}
+
 variable "user-data-masters" {
   description = "User data for master instances"
   type = string
@@ -723,14 +735,20 @@ resource "aws_elb" "elb-infra-public" {
 }
 
 #EC2s
+#SSH key
+resource "aws_key_pair" "ssh-key" {
+  key_name = "ssh-key"
+  public_key = file("${path.module}/${var.ssh-keyfile}")
+}
+
 #Bastion host
 resource "aws_instance" "tale_bastion" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = "t2.medium"
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
 
   root_block_device {
       volume_size = 25
@@ -746,14 +764,14 @@ resource "aws_instance" "tale_bastion" {
 
 #Masters
 resource "aws_instance" "tale_mast01" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-master.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-masters 
 
   root_block_device {
@@ -785,14 +803,14 @@ resource "aws_instance" "tale_mast01" {
 }
 
 resource "aws_instance" "tale_mast02" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-master.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-masters 
 
   root_block_device {
@@ -824,14 +842,14 @@ resource "aws_instance" "tale_mast02" {
 }
 
 resource "aws_instance" "tale_mast03" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-master.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-masters 
 
   root_block_device {
@@ -864,14 +882,14 @@ resource "aws_instance" "tale_mast03" {
 
 #Infras
 resource "aws_instance" "tale_infra01" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-web-in.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -898,14 +916,14 @@ resource "aws_instance" "tale_infra01" {
 }
 
 resource "aws_instance" "tale_infra02" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-web-in.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -931,14 +949,14 @@ resource "aws_instance" "tale_infra02" {
   }
 }
 resource "aws_instance" "tale_infra03" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-web-in.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -966,13 +984,13 @@ resource "aws_instance" "tale_infra03" {
 
 #Workers
 resource "aws_instance" "tale_worker01" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -999,13 +1017,13 @@ resource "aws_instance" "tale_worker01" {
 }
 
 resource "aws_instance" "tale_worker02" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -1032,13 +1050,13 @@ resource "aws_instance" "tale_worker02" {
 }
 
 resource "aws_instance" "tale_worker03" {
-  ami = "ami-0404b890c57861c2d"
+  ami = var.rhel7-ami
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "tale-toul"
+  key_name= "ssh-key"
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -1382,4 +1400,8 @@ output "iam_admin_encrypted_key" {
 output "registry_s3_bucket" {
   value = aws_s3_bucket.registry-bucket.arn
   description = "ARN value for the registry S3 bucket"
+}
+output "ssh_key" {
+  value = "${path.module}/${var.ssh-keyfile}"
+  description = "EC2 ssh key local file path"
 }
