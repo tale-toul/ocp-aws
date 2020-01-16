@@ -1,0 +1,65 @@
+[OSEv3:children]
+masters
+etcd
+nodes
+
+[OSEv3:vars]
+debug_level=2
+ansible_user=ec2-user
+ansible_become=yes
+
+openshift_deployment_type=openshift-enterprise
+openshift_release=3.11
+#openshift_image_tag=v3.11.157
+#openshift_pkg_version=-3.11.157
+
+openshift_master_cluster_hostname= {{ master_internal_lb }}
+openshift_master_cluster_public_hostname= {{ master_public_lb }}
+#The regex_replace filter is used to remove the final dot in the domian name that is present 
+#in the terraform output, but the deploy cluster playbook does not like.  So ocpext.rhcee.support. becomes ocpext.rhcee.support 
+openshift_master_default_subdomain= apps.{{ ext_public_domain | regex_replace('(.*)\.$' '\\1')}}
+openshift_master_api_port=443
+openshift_master_console_port=443
+
+openshift_master_identity_providers=[{'name': 'htpasswd_auth', 'login': 'true', 'challenge': 'true', 'kind': 'HTPasswdPasswordIdentityProvider'}] 
+openshift_master_htpasswd_file=/tmp/files/htpasswd.openshift
+
+#These selectors are the default values anyway
+openshift_router_selector='node-role.kubernetes.io/infra=true'
+
+# OpenShift Registries Locations
+oreg_url=registry.redhat.io/openshift3/ose-${component}:${version}
+oreg_auth_user= {{ oreg_auth_user }}
+oreg_auth_password= {{ oreg_auth_password }}
+
+#AWS cloud provider
+openshift_cloudprovider_kind=aws
+openshift_clusterid= {{ cluster_name }}
+openshift_cloudprovider_aws_access_key= {{ iam_admin_key_id }}
+openshift_cloudprovider_aws_secret_key= {{ iam_admin_key }}
+
+#AWS - Registry configuration
+openshift_hosted_manage_registry=true
+openshift_hosted_registry_storage_kind=object
+openshift_hosted_registry_storage_provider=s3
+openshift_hosted_registry_storage_s3_accesskey= {{ iam_registry_key_id }}
+openshift_hosted_registry_storage_s3_secretkey= {{ iam_registry_key }}
+openshift_hosted_registry_storage_s3_bucket= {{ registry_s3_bucket }}
+openshift_hosted_registry_storage_s3_region= {{ region_name }}
+openshift_hosted_registry_storage_s3_chunksize=26214400
+openshift_hosted_registry_storage_s3_rootdirectory=/registry
+openshift_hosted_registry_pullthrough=true
+openshift_hosted_registry_acceptschema2=true
+openshift_hosted_registry_enforcequota=true
+openshift_hosted_registry_replicas=3
+openshift_registry_selector='node-role.kubernetes.io/infra=true'
+
+#Service Catalog and broker
+openshift_enable_service_catalog=true
+template_service_broker_install=true
+
+#Networking
+os_sdn_network_plugin_name='redhat/openshift-ovs-networkpolicy'
+openshift_portal_net=172.30.0.0/16
+openshift_master_cluster_method=native
+

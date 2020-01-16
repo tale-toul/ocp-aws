@@ -20,12 +20,20 @@ variable "cluster_name" {
   default = "ocp"
 }
 
-variable "dns_domain" {
-  description = "Internet facing DNS domain used in this cluster"
+variable "vpc_name" {
+  description = "Name assigned to the VPC"
   type = string
-  default = "rhcee.support"
+  default = "volatil"
 }
 
+variable "dns_domain_ID" {
+  description = "Zone ID for the route 53 DNS domain that will be used for this cluster"
+  type = string
+  default = "Z1UPG9G4YY4YK6"
+}
+
+#Not all instances types are available in all regions
+#Depending on the instance type used, the device for the addtional disks use the name xvd<letter> (xvda) or nvme<number>n1 (nvme1n1)
 variable "master-instance-type" {
   description = "Type of instance used for master nodes, define the hardware characteristics like memory, cpu, network capabilities"
   type = string
@@ -48,6 +56,18 @@ variable "ssh-keyfile" {
   description = "Name of the file with public part of the SSH key to transfer to the EC2 instances"
   type = string
   default = "ocp-ssh.pub"
+}
+
+variable "ssh-keyname" {
+  description = "Name of the key that will be imported into AWS"
+  type = string
+  default = "ssh-key"
+}
+
+variable "registry-bucket-name" {
+  description = "S3 registry bucket name"
+  type = string
+  default = "registry-tale-bucket"
 }
 
 variable "user-data-masters" {
@@ -128,7 +148,7 @@ resource "aws_vpc" "vpc" {
     enable_dns_support = true
 
     tags = {
-        Name = "volatil"
+        Name = var.vpc_name
         Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
@@ -737,7 +757,7 @@ resource "aws_elb" "elb-infra-public" {
 #EC2s
 #SSH key
 resource "aws_key_pair" "ssh-key" {
-  key_name = "ssh-key"
+  key_name = var.ssh-keyname
   public_key = file("${path.module}/${var.ssh-keyfile}")
 }
 
@@ -748,7 +768,7 @@ resource "aws_instance" "tale_bastion" {
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
 
   root_block_device {
       volume_size = 25
@@ -771,7 +791,7 @@ resource "aws_instance" "tale_mast01" {
                             aws_security_group.sg-master.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-masters 
 
   root_block_device {
@@ -810,7 +830,7 @@ resource "aws_instance" "tale_mast02" {
                             aws_security_group.sg-master.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-masters 
 
   root_block_device {
@@ -849,7 +869,7 @@ resource "aws_instance" "tale_mast03" {
                             aws_security_group.sg-master.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-masters 
 
   root_block_device {
@@ -889,7 +909,7 @@ resource "aws_instance" "tale_infra01" {
                             aws_security_group.sg-web-in.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -923,7 +943,7 @@ resource "aws_instance" "tale_infra02" {
                             aws_security_group.sg-web-in.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -956,7 +976,7 @@ resource "aws_instance" "tale_infra03" {
                             aws_security_group.sg-web-in.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -990,7 +1010,7 @@ resource "aws_instance" "tale_worker01" {
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -1023,7 +1043,7 @@ resource "aws_instance" "tale_worker02" {
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -1056,7 +1076,7 @@ resource "aws_instance" "tale_worker03" {
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
-  key_name= "ssh-key"
+  key_name= aws_key_pair.ssh-key.key_name
   user_data = var.user-data-nodes
 
   root_block_device {
@@ -1084,13 +1104,13 @@ resource "aws_instance" "tale_worker03" {
 
 #ROUTE53 CONFIG
 #Datasource for rhcee.support. route53 zone
-data "aws_route53_zone" "rhcee" {
-  zone_id = "Z1UPG9G4YY4YK6"
+data "aws_route53_zone" "domain" {
+  zone_id = var.dns_domain_ID
 }
 
 #External hosted zone, this is a public zone because it is not associated with a VPC
 resource "aws_route53_zone" "external" {
-  name = "${var.cluster_name}ext.${var.dns_domain}."
+  name = "${var.cluster_name}ext.${data.aws_route53_zone.domain.name}"
 
   tags = {
     Name = "external"
@@ -1100,8 +1120,8 @@ resource "aws_route53_zone" "external" {
 }
 
 resource "aws_route53_record" "external-ns" {
-  zone_id = data.aws_route53_zone.rhcee.zone_id
-  name    = "${var.cluster_name}ext.${var.dns_domain}."
+  zone_id = data.aws_route53_zone.domain.zone_id
+  name    = "${var.cluster_name}ext.${data.aws_route53_zone.domain.name}"
   type    = "NS"
   ttl     = "30"
 
@@ -1115,7 +1135,7 @@ resource "aws_route53_record" "external-ns" {
 
 #Internal hosted zone, this is a private zone because it is associated with a VPC
 resource "aws_route53_zone" "internal" {
-  name = "${var.cluster_name}int.${var.dns_domain}."
+  name = "${var.cluster_name}int.${data.aws_route53_zone.domain.name}"
 
   vpc {
     vpc_id = aws_vpc.vpc.id
@@ -1170,8 +1190,10 @@ resource "aws_route53_record" "master-int" {
 #S3 BUCKETS
 #Registry Bucket
 resource "aws_s3_bucket" "registry-bucket" {
-  bucket = "registry-tale-bucket"
+  bucket = var.registry-bucket-name
   region = var.region_name
+  force_destroy = true
+
   acl    = "private"
 
   tags = {
@@ -1270,7 +1292,7 @@ resource "aws_iam_user_policy" "policy-registry" {
         "s3:GetBucketLocation",
         "s3:ListBucketMultipartUploads"
       ],
-      "Resource": "arn:aws:s3:::registry-tale-bucket"
+      "Resource": "arn:aws:s3:::${var.registry-bucket-name}"
     },
     {
       "Effect": "Allow",
@@ -1281,7 +1303,7 @@ resource "aws_iam_user_policy" "policy-registry" {
         "s3:ListMultipartUploadParts",
         "s3:AbortMultipartUpload"
       ],
-      "Resource": "arn:aws:s3:::registry-tale-bucket/*"
+      "Resource": "arn:aws:s3:::${var.registry-bucket-name}/*"
     }
   ]
 }
@@ -1398,10 +1420,26 @@ output "iam_admin_encrypted_key" {
   description = "Encrypted secret key for the iam user admin"
 }
 output "registry_s3_bucket" {
-  value = aws_s3_bucket.registry-bucket.arn
+  value = aws_s3_bucket.registry-bucket.id
   description = "ARN value for the registry S3 bucket"
 }
 output "ssh_key" {
   value = "${path.module}/${var.ssh-keyfile}"
   description = "EC2 ssh key local file path"
+}
+output "ext_public_domain" {
+  value = aws_route53_zone.external.name
+  description="external DNS domain"
+}
+output "int_private_domain" {
+  value = aws_route53_zone.internal.name
+  description = " Internal private DNS domain"
+}
+output "cluster_name" {
+ value = var.cluster_name
+ description = "Cluser name, used for prefixing some component names like the DNS domain"
+}
+output "region_name" {
+ value = var.region_name
+ description = "AWS region where the cluster and its components will be deployed"
 }

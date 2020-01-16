@@ -1,37 +1,40 @@
 ---
-- name: Local actions for all hosts
-  hosts: all
-  become: no
-  gather_facts: no
-  tasks:
-        - name: Remove stale entries from known_hosts file
-          local_action: command ssh-keygen -R {{ inventory_hostname }}
 - name: Local actions for localhost
   hosts: 127.0.0.1
   connection: local
   become: no
   tasks:
+        - name: Remove stale entries from known_hosts file in the ansible host
+          command: ssh-keygen -R {{ item }}
+          with_items: "{{ groups['all'] }}"
         - name: Save terraform variables to a file
-            shell: terraform output |tr '=' ':' > ../Ansible/group_vars/all/terraform_outputs.var 
-            args: 
-              chdir: ../Terraform
-        - name: Add DNS internal domain to terraform vars
-            shell: (echo -n 'aws_internal_domain:'; echo -n ' '; terraform output master01_name|cut -d. -f2-) >> ../Ansible/group_vars/all/terraform_outputs.var 
-            args: 
-              chdir: ../Terraform
+          shell: terraform output |tr '=' ':' > ../Ansible/group_vars/all/terraform_outputs.var
+          args:
+            chdir: ../Terraform
+        - name: Add internal DNS domain to terraform vars
+          shell: (echo -n 'aws_internal_domain:'; echo -n ' '; terraform output master01_name|cut -d. -f2-) >> ../Ansible/group_vars/all/terraform_outputs.var
+          args:
+            chdir: ../Terraform
         - name: Load terraform output variables
           include_vars:
             file: group_vars/all/terraform_outputs.var
-        - name: Render ssh jinja2 template
+        - name: Render ssh config jinja2 template
           template:
             src: ssh.cfg.j2
             dest: ssh.cfg
             mode: 0644
+        - name: Render deploy inventory file
+          template:
+            src: inventario.j2
+            dest: inventario
+            mode: 0644
+        - name: Add hosts to inventory file
+          shell: ./create_inventario.sh >> inventario
 
-- name: Assing a FQDN name to the bastion
+- name: First access to bastion host
   hosts: bastion
   tasks:
-        - name: Assign a proper hostname to the server
+        - name: Assing a FQDN name to the bastion host
           hostname:
               name: "{{ inventory_hostname }}"
 
@@ -62,6 +65,112 @@
                 - rhel-7-fast-datapath-rpms
                 - rhel-7-server-ansible-2.6-rpms
               purge: True
+        - name: Update system packages
+          yum:
+              state: latest
+              name: '*'
+          when: update_packages
+
+- name: Check and set for additional storage for all nodes
+  hosts: nodes
+  tasks:
+        - name: Check for /var/lib/origin/openshift.local.volumes
+          command: mountpoint /var/lib/origin/openshift.local.volumes
+          ignore_errors: True
+          register: point_local_results
+        - name: Add /var/lib/origin/openshift.local.volumes if required
+          block:
+            - name: Check for /dev/nvme2n1
+              stat: 
+                path: /dev/nvme2n1
+              register: nvme_status
+            - name: Create filesystem in /dev/nvme2n1
+              filesystem:
+                fstype: xfs
+                dev: /dev/nvme2n1
+                opts: -L ocp_emptydir
+              when: nvme_status.stat.exists == True
+            - name: Check for /dev/xvdc
+              stat:
+                path: /dev/xvdc
+              register: xvd_status
+            - name: Create filesystem in /dev/xvdc
+              filesystem:
+                fstype: xfs
+                dev: /dev/xvdc
+                opts: -L ocp_emptydir
+              when: xvd_status.stat.exists == True
+            - mount:
+                path: /var/lib/origin/openshift.local.volumes 
+                fstype: xfs
+                src: LABEL=ocp_emptydir
+                state: mounted
+            - name: Check again for /var/lib/origin/openshift.local.volumes
+              command: mountpoint /var/lib/origin/openshift.local.volumes
+          when: point_local_results.rc == 1
+        - name: Check for /dev/nvme1n1 for docker storage
+          stat:
+            path: /dev/nvme1n1 
+          register: nvme1_stat
+        - name: Define variable for docker storage device to /dev/nvme1n1 
+          set_fact:
+            docker_device: "/dev/nvme1n1" 
+          when: nvme1_stat.stat.exists == True
+        - name: Check for /dev/xvdb for docker storage
+          stat:
+            path: /dev/xvdb
+          register: xvdb_stat
+        - name: Define variable for docker storage device to /dev/xvdb 
+          set_fact:
+            docker_device: "/dev/xvdb" 
+          when: xvdb_stat.stat.exists == True
+        - name: Set the docker device in /etc/sysconfig/docker-storage-setup
+          lineinfile:
+            path: /etc/sysconfig/docker-storage-setup
+            regexp: '^DEVS='
+            line: DEVS={{ docker_device }}
+
+- name: Check and set for etcd specific storage on masters
+  hosts: masters
+  tasks:
+        - name: Check for /var/lib/etcd
+          command: mountpoint /var/lib/etcd
+          ignore_errors: True
+          register: point_etcd
+        - name: Add /var/lib/etcd if required
+          block:
+            - name: Check for /dev/nvme3n1
+              stat: 
+                path: /dev/nvme3n1
+              register: nvme3_stats
+            - name: Create filesystem in /dev/nvme3n1
+              filesystem:
+                fstype: xfs
+                dev: /dev/nvme2n1
+                opts: -L etcd
+              when: nvme3_stats.stat.exists == True
+            - name: Check for /dev/xvdd
+              stat:
+                path: /dev/xvdd
+              register: xvdd_stats
+            - name: Create filesystem in /dev/xvdd
+              filesystem:
+                fstype: xfs
+                dev: /dev/xvdd
+                opts: -L etcd
+              when: xvdd_stats.stat.exists == True
+            - mount:
+                path: /var/lib/etcd
+                fstype: xfs
+                src: LABEL=etcd
+                state: mounted
+          when: point_etcd.rc == 1
+        - name: Check again for /var/lib/etcd stopping on errors
+          command: mountpoint /var/lib/etcd
+
+- name: Set up bastion host
+  hosts: bastion
+  tasks:
         - name: Install base packages
           yum:
               state: latest
@@ -69,9 +178,27 @@
                 - openshift-ansible
                 - vim
                 - screen 
-        - name: Update system packages
-          yum:
-              state: latest
-              name: '*'
-          when: update_packages
+                - atomic-openshift-clients
+                - git
+                - bind-utils
+        - name: Copy required support files to bastion host
+          copy:
+            src: files/
+            dest: /tmp/files
+            owner: ec2-user
+        - name: Copy inventory file to bastion host
+          copy:
+            src: inventario
+            dest: OCP311/
+            owner: ec2-user
+        - name: Copy ansible.cfg file to bastion host
+          copy:
+            src: ansible.cfg
+            dest: OCP311/
+            owner: ec2-user
+        - name: Remove ssh_args from ansible.cfg in bastion host
+          lineinfile:
+            path: OCP311/ansible.cfg
+            state: absent
+            line: ssh_args = -F ./ssh.cfg -C -o ControlMaster=auto -o ControlPersist=60s
 ...

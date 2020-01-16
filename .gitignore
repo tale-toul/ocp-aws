@@ -3,9 +3,12 @@
 Terraform/.terraform
 Terraform/ocp-ssh*
 Ansible/inventario
+Ansible/inventory-prereq
 Ansible/ansible.log
 Ansible/vault_id
 Ansible/group_vars/all/terraform_outputs.var
+Ansible/group_vars/all/secrets
+Ansible/files/htpasswd.openshift
 *.tfstate
 *.tfstate.backup
 ocp-on-aws-8.pdf

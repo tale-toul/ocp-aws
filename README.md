@@ -8,7 +8,7 @@ https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf
 
 ### Terraform
 
-The Terraform directory contains the neccessary files to create the infrastructure required to install OCP in AWS
+The Terraform directory contains the neccessary files to create the infrastructure required to install an OCP 3.11 cluster in AWS.
 
 The architecture used is based on the one descrived in [this reference document](https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf) from Red Hat.
 
@@ -40,13 +40,15 @@ In addition to the tag Clusterid, the EC2 instances also require the following t
 
 #### Variables
 
-Some variables are defined at the beginning of the file to simplify the rest of the configuration, it is enough to modify its values to change the configuration of the infrastructure deployed by terraform:
+Variables are defined at the beginning of the file to simplify the rest of the configuration, it is enough to modify its values to change the configuration of the infrastructure deployed by terraform:
 
 * **region_name**.- AWS region where the cluster is deployed
 
 * **cluster_name**.- Indentifier used for prefixing some component names like the DNS domain
 
-* **dns_domain**.- Internet facing DNS domain used in this cluster
+* **vpc_name**.- Name assigned to the VPC
+
+* **dns_domain_ID**.- Zone ID for the route 53 DNS domain that will be used for this cluster
 
 * **master-instance-type**.- Type of instance used for master nodes, define the hardware characteristics like memory, cpu, network capabilities
 
@@ -54,7 +56,11 @@ Some variables are defined at the beginning of the file to simplify the rest of 
 
 * **rhel7-ami**.- AMI on which the EC2 instances are based on, this one is a RHEL 7.7 in the Ireland region.  This variable is region dependent, if the value of variable **region_name** is modified, this one must be updated too.
 
-* **ssh-keyfile**.- Name of the file with public part of the SSH key to transfer to the EC2 instances
+* **ssh-keyfile**.- Name of the file with the public part of the SSH key to transfer to the EC2 instances
+
+* **ssh-keyname**.- Name of the key that will be imported into AWS
+
+* **registry-bucket-name**.- S3 registry bucket name
 
 * **user-data-masters**.- User data for master instances, contains cloud config directives to setup disks and partitions.
 
@@ -84,7 +90,7 @@ A total of 10 EC2 instances are created.  Masters and workers have 4 vCPUs and 1
 
 The bastion host is assigned an Elastic IP, and a corresponding DNS entry is created for that IP.  
 
-The AWS ami that used to deploy the hosts is based on RHEL 7.7.  To look for the AWS amis the following command can be used.  The aws CLI binary needs to be available, the authentication to AWS can be completed exporting the variables **AWS_ACCESS_KEY_ID** and **AWS_SECRET_ACCESS_KEY**:
+The AWS ami used to deploy the hosts is based on RHEL 7.7.  To look for the AWS amis the following command can be used.  The aws CLI binary needs to be available, the authentication to AWS can be completed exporting the variables **AWS_ACCESS_KEY_ID** and **AWS_SECRET_ACCESS_KEY**:
 
 ```
 $ export AWS_ACCESS_KEY_ID=xxxxxx
@@ -102,7 +108,7 @@ $ ssh-keygen -o -t rsa -f ocp-ssh -N ""
 ```
 The previous command generates 2 files: ocp-ssh with the private part of the key, and ocp-ssh.pub with the public part of the key.  The private part is not protected by a passphrase (-N "")
 
-An SSH key pair resource is created based on the ssh key created in the previous step.
+An SSH key pair resource is created based on the ssh key created in the previous step. The name of the key must be unique in The AWS account, to simplify the changing of this key name the variable **ssh-keyname** is defined.
 
 The EC2 VMs created in the private networks need access to the Internet to donwload packages and images, so 3 NAT gateways are created, one for every private subnet.
 
@@ -180,7 +186,7 @@ The load balancers are of type **aws_elb**.- This _classic_ load balancer allows
 
 #### DNS Route 53
 
-Two DNS zones are created to resolve the names of components in the cluster: one external to be accessable from the Internet, and one internal to be only accessable from inside the cluster.  Both zones are created under **rhce.support** domain.
+Two DNS zones are created to resolve the names of components in the cluster: one external to be accessible from the Internet, and one internal to be only accessible from inside the cluster.  Both zones are created under **rhce.support** by default, but another domain can be selecte assigning a value to the variable **dns_domain_ID**, this variable expects a zone ID not a name.
 
 A few records have been created so far.
 
@@ -188,7 +194,7 @@ A few records have been created so far.
 
   * bastion
   * master.- for the external load balancer
-  * *.apps.- for the applications domain
+  * *.apps.- wildcard record for the applications 
 
 * In the internal zone 
 
@@ -197,13 +203,15 @@ A few records have been created so far.
   
 #### S3 bucket
 
-An S3 bucket is created to be used as backend storage for the internal OpenShift image registry.  It is recommended to create the bucket in the same region as the rest of the resources.
+An S3 bucket is created to be used as backend storage for the internal OpenShift image registry.  It is recommended to create the bucket in the same region as the rest of the resources, this is controlled through the variable **region_name**.  The name of the bucket must be unique across the whole AWS infrastructure so the variable **registry-bucket-name** has been defined to make it easy to change this name in every deployment.
+
+By default the non empty S3 buckets are not deleted by the command **terraform destroy**, this behaviour has been changed with the use of the argument **force_destroy = true** which forces terraform to destroy the S3 bucket even if this is not empty.
 
 #### IAM users
 
 Two IAM users are created to be used by the installation playbooks, and later by the cluster itself.  The policy definitions are created as "here" documents, it is **important** that the opening and closing curly brackets are placed on column 1 of the document, otherwise a malformed JSON error happens when running "terraform apply" command:
 
-* The first one (iam-admin) is to be associated with the EC2 instances and has a policy that allows it to operate on the EC2 instances and load balancers.
+* The first one (iam-admin) is to be associated with the EC2 instances and has a policy that allows it to operate on the EC2 instances and load balancers. The id and key of this user is assigned to the following variables in the inventory file used to deploy the cluster: **openshift_cloudprovider_aws_access_key**; **openshift_cloudprovider_aws_secret_key**
 
 * The second one (iam-registry) has a policy that allows it to manage the S3 bucket that is also created as part of this terraform definition.
 
@@ -211,7 +219,11 @@ In the output section there are entries to print the access key ID and access ke
 
 ### Ansible
 
-To run an ansible playbook against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. A configuration file **ssh.cfg** is created from a jinja2 template (ssh.cfg.j2), containing a block with the connection parameters for the bastion host, and a block for the connection to the rest of the hosts in the VPC.  The template is rendered in the prereqs-ocp.yml ansible playbook, using variables from the terraform output variables.
+An ansible playbook is used to prepare the hosts before actually running the official cluster deployment playbooks.
+
+#### SSH connection through the bastion host
+
+Before running any ansible playbooks against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. A configuration file **ssh.cfg** is created from a jinja2 template (ssh.cfg.j2), containing a block with the connection parameters for the bastion host, and a block for the connection to the rest of the hosts in the VPC.  The template is rendered in the prereqs-ocp.yml ansible playbook, using variables from the terraform output variables.
 
 ```
 Host bastion.ocpext.rhcee.support 
@@ -257,9 +269,11 @@ To apply this configuration to ansible the following block is added to ansible.c
 ssh_args = -F ./ssh.cfg
 ```
 
-When ansible is run for the first time after the hosts have been created the remote keys need to be accepted, even when using the option **host_key_checking=False** not to be bothered with that key validation.  When an indirect connection is stablished to the hosts in the private subnets the key validation happens both at the bastion host and at the final host, but ansible doesn't seem to be prepared for two question and the play hangs on the second question until a connection timeout is reached.
+When ansible is run for the first time after the hosts have been created, the remote keys need to be accepted, even when using the option **host_key_checking=False** not to be bothered with that key validation.  When an indirect connection is stablished to the hosts in the private subnets the key validation happens both at the bastion host and at the final host, but ansible doesn't seem to be prepared for two question and the play hangs on the second question until a connection timeout is reached.
 
-To avoid this problem we have to make sure that a connection to the bastion host is stablished before going to the hosts in the private subnets, for that reason we have to make sure that we run a play against the bastion host before running another against the registry.
+To avoid this problem we have to make sure that a connection to the bastion host is stablished before going to any other host in the private subnets, for that reason we have to make sure that we run a play against the bastion host before running any other plays against the hosts in the private networks.
+
+#### Ansible configuration file
 
 An **ansible.cfg** configuration file is created with the following contents:
 
@@ -269,6 +283,9 @@ inventory=inventario
 host_key_checking=False
 log_path = ansible.log
 callback_whitelist = profile_tasks, timer
+any_errors_fatal = True
+timeout = 30
+forks=10
 
 [privilege_escalation]
 become=true
@@ -276,61 +293,72 @@ become_user=root
 become_method=sudo
 
 [ssh_connection]
-ssh_args = -F ./ssh.cfg
+ssh_args = -F ./ssh.cfg -C -o ControlMaster=auto -o ControlPersist=60s
 ```
 In the **default** section:
-The default inventory file that ansible will look for is called **inventario**
-No ssh key checking for the remote host will be performed
-The default log file for ansible will be **ansible.log**
-Time marks will be shown along the playbook execution
+inventory=inventario.- The default inventory file that ansible will look for is called **inventario**
+host_key_checking=False.- No ssh key checking for the remote host will be performed
+log_path = ansible.log.- The default log file for ansible will be **ansible.log**
+callback_whitelist = profile_tasks, timer.- Time marks will be shown along the playbook execution
+any_errors_fatal = True.- Any error in any task will cause the whole playbook to stop after the failing task.
+timeout = 30.- Time out for the ssh connections.
+forks=10.- Up to 10 host can run any task in parrallel.
 
 In the **privilege_escalation** section:
 All tasks will be run via sudo as root
 
 In the **ssh_connection** section:
-The ssh connections will use a specific configuration file
+The ssh connections will use a specific configuration file, plus additional options that are usually included as default configuration in ansible.
 
-To verify that the configuration is correct and all nodes are accesble via ansible, an inventory file is created after deploying the terraform infrastructure using a script called **create_inventario.sh**
+#### Inventory files
 
-A ping is sent to all hosts to check they are reachable:
+Two different inventory files are used during the cluster deployment:
 
-```
-$ ansible all -m ping 
-```
+* A simple inventory file that is used by the **prereqs-ocp.yml**, basically containing the list of all hosts in the cluster, including the bastion host, grouped by the sections that will be used later in the deploy cluster inventory file. This inventory file is generated by the script **Ansible/create_inventario.sh** which gathers the data from the terraform output.  This inventory file must be recreated every time the infrastructure is created with terraform.
+
+* A complete inventory file used by the deploy_cluster.yml playbook.  This inventory file is created by the **prereqs-ocp.yml** playbook from two different sources: 
+
+  * A jinja2 template containing the sections **[OSEv3:children]** and **[OSEv3:vars]**, that is rendered in the **prereqs-ocp.yml** playbook. The variables used in the templated are populated from the data generated by the `terraform output` command, and are updated every time new infrastructure is generate by terraform. 
+
+  * The host groups section that is created and added at the end of the first inventory part, also in the **prereqs-ocp.yml** playbook.
+
+  The resulting inventory file should be reviewed and possibly modified before running the cluster deployment playbooks.
 
 #### Prerequisites
 
-A playbook is created to apply some prerequisites in the cluster host.  The playbook is **prereqs-ocp.yml**.
+A playbook is created to set up the hosts in the cluster before running the actual deployment playbook.  The playbook is called **prereqs-ocp.yml**.
 
-In the first play a single task is used to remove the stale ssh keys in the known_hosts file that belonged to previous EC2 instances with the same hostname as the one created by the last run of terraform. 
+In the first play **"Local actions for localhost"** the following tasks are performed in localhost:
 
-The next play is run against the localhost. The first group of tasks creates a file with variables from terraform output, and loads them into ansible, finally the ssh jinja2 template is redered. 
+ * Remove any stale ssh keys in the user's known_hosts file that belonged to previous EC2 instances with the same hostname as the ones created by the last terraform run.
 
-The next play is run against the bastion host, it serves to puposes: 
+ * Create a file with variables from terraform output, and loads them into ansible. 
 
-* Make sure the bastion is accessed before any of the other hosts in the private networks
+ * Create the ssh config file from a jinja2 template.  This config file will be used by the rest of the playbook to connect to the remote hosts.
 
-* Apply changes specific to the bastion host:
+ * Create the inventory file to be used by the deploy cluster playbooks later.  This file is created in two stages: from a jinja2 template and from a script.
 
-  * Change the hostname to the one defined in the inventory file.
+The next play **First access to bastion host** is run against the bastion host, this makes sure that the bastion is accessed before any of the other hosts in the private networks
 
-The next play contains several tasks:
+The next play **Prerequisites for OCP cluster members** contains several tasks:
 
 * Find and Disable any repo file not manage by the subscription manager
  
-* Register nodes all the nodes with Red Hat
+* Register nodes with Red Hat
 
 * Enable the repositories needed to install Openshift.
 
-* Install some required packages like openshift-ansible.
-
-* Update operating system packages, only when the update_packages variable has been defined as true, the default value is false.
+* Update operating system packages, only when the **update_packages** variable has been defined as true, the default value is false.
 
 The username and password required to register the hosts with Red Hat are encrypted in a vault file.  the playbook must be run providing the password to unencrypt that file, for example by storing the password in a file and using the command:
 
 ```
 $ ansible-playbook --vault-id vault_id.txt prereqs-ocp.yml
 ```
+
+The next two plays: **Check and set for additional storage for all nodes** and **Check and set for etcd specific storage on masters** take care make sure masters and nodes in the cluster are setup following the [storage recommendations for OpenShift 3.11](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#prerequisites-storage-management).  See the [Storage management section](#storage-management) later in this document.
+
+The next play **Set up bastion host** prepares the bastion host to run the official OpenShift deployment playbooks, by installing some packages and copying some required files. 
 
 #### Tests
 
@@ -346,30 +374,135 @@ $ while true; do curl -k https://elb-master-public-697013167.eu-west-1.elb.amazo
 
 * **docker-test.yaml**.- This playbook is run against all nodes, including the bastion, install docker packages, starts the docker service, and runs a container.  
 
-### Installation
+#### Storage management 
 
-Create a credentials file for the Terraform provider in the Terraform direcotry, as defined in the main.tf file, see the [Terraform section](#terraform) of this document.
+The [OpenShift documentation](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#prerequisites-storage-management) recommends minimums for available storage in some partitions in the cluster host members.  To fulfill these recommendations a two step process is followed:
 
-Select an AWS region to deploy the infrastructure on, by default the region is Ireland (eu-west-1), but it can be changed by assigning a value to the variable region_name, for example by passing the -var argument in the command line  `-var="region_name=eu-central-1"`
+* The first step is performed in terraform:
 
-Select the AMI to be used as base OS for the EC2 instances, by default this is a RHEL 7.7 in the Ireland region, if the region is changed, this value must also be changed accordingly, see the [EC2 instances section for details](#ec2).
+ * The definition of the EC2 instances in terraform add additional disks to the hosts: 3 for the masters; 2 for the nodes.
+ 
+ * A user-data script is defined, one for the masters and another for the rest of the nodes.  Here the additional disks previously added are setup to be used for the partitions **/var/lib/origin/openshift.local.volumes** in all nodes; **/var/lib/etcd** in the masters.  Also in all nodes the file defining the docker storage setup is created **/etc/sysconfig/docker-storage-setup**, this file references one of the additional disks as a backend for the docker storage.  Unfortunately the device names used in the user-data script may not match the actual device names in the EC2 instances, this happens because different instance types use different naming conventions for the disk device names, this can lead to situation in which the hosts created by terraform have the additional disks but these are not configured as backend storage as expected.
 
-Create an SSH key pair with the following command, the terraform configuration expects the output files to be called ocp-ssh and ocp-ssh.pub:
+* The second step is performed in ansible.  The **prereqs-ocp.yml** playbook contains two plays that verify and correct the storage setup in the hosts: **Check and set for additional storage for all nodes**; **Check and set for etcd specific storage on masters**.  
+  The plays start by verifying that the directories are mountpoints.  Errors are ignored to avoid the playbook to stop in case the directory is not a mountpoint; the result is saved in a variable:
+
+```
+        - name: Check for /var/lib/origin/openshift.local.volumes
+          command: mountpoint /var/lib/origin/openshift.local.volumes
+          ignore_errors: True
+          register: point_local_results
+```
+  Next a list of task is grouped as a block to be run on the hosts for which the directory was not a mountpoint, which means that the user-data script could not properly configure the disk. These tasks look for the right device name to use; create the filesystem in the device; mount it, and finally check again that the directory is a mount point, but this time errors are not ignored so the playbook will fail if the mountpoint does not exists.
+
+  Next the disk device used as backend storage for docker is updated in the **/etc/sysconfig/docker-storage-setup** by looking for the right device name and assigning it to a variable, then updating the line starting with **DEVS=** in the configuration filei. These tasks are always run, without previously verifying if the configuration is already correct, but ansible will actually not change the configuration file if this is already correct.  
+
+
+### Cluster deployment instructions
+
+[Terraform](https://www.terraform.io/) and [Ansible](https://www.ansible.com/) must be installed in the host where the installation will be run from; an [AWS](https://aws.amazon.com/) account is needed to create the infrastructure elements; A [Red Hat](https://access.redhat.com) user account with entitlements for installing OpenShift is required. 
+
+* Create a credentials file for the Terraform provider in the Terraform direcotry, as defined in the main.tf file, see the [Terraform section](#terraform) of this document.
+
+* Create an SSH key pair with the following command and copy it to the terraform directory, the terraform configuration expects the output files to be called ocp-ssh and ocp-ssh.pub by default, but the name can be changed via the terraform variable ssh-keyfile:
 
 ```
 $ ssh-keygen -o -t rsa -f ocp-ssh -N ""
 ```
 
-Deploy the infrastructure by running a command like the following in the Terraform directory, in this case a specific region and AMI are selected:
+* The default identity provider is an htpassword file, this file must be created and filled with entries, the prerequisites playbook and the ansible inventory used to deploy the cluster expect this file to be at **Ansible/files/htpasswd.openshift**, for example:
+
+```
+$ htpasswd -cb htpasswd.openshift user1 user1_password
+$ for x in {1..5}; do htpasswd -b htpasswd.openshift user${x} user${x}_password; done
+```
+
+* Create an ansible vault file with the following secret variables: 
+
+  * **subscription_username**; **subscription_password**.- Username and password of the Red Hat user with the entitlements to subscribe nodes with Red Hat
+  * **oreg_auth_user**; **oreg_auth_password**.- Username and password of the user with access to the Red Hat container registry. See [here](https://access.redhat.com/RegistryAuthentication) to learn how to get a user.
+
+ An example file would look like:
+
+```
+---
+subscription_username: mariekondo
+subscription_password: i3r@assP
+oreg_auth_user: 1970546|aws-test
+oreg_auth_password: eyJhbGciOiJSUzUxMiJ9.eyJzdWIiOiJlZmQyZDY....UE7x9h7-ZJjj3zn5KS1O7b1hTra-hwjb
+...
+```
+  To encrypt the file with ansible vault use a command like:
+
+```
+$ ansible-vault encrypt linux_vars.txt
+```
+
+Place the resulting encrypted file in the directory Ansible/group_vars/all
+
+* Many terraform variables are defined and can be used to modify several aspects of the infraestructure deployment, some of these variables need to be modified to avoid collitions with other cluster previously deployed using this same terraform file. Review these variables and assing values where needed, in particular:
+
+  * **region_name**.- The AWS region to deploy the infrastructure on, by default the region is **eu-west-1** (Ireland ).  For example  `-var="region_name=eu-central-1"`
+
+  * **cluster_name**.- The prefix name for the cluster, by default it is **ocp**.  For example `-var="cluster_name=prodocp"`
+   
+  * **vpc_name**.- The name for the VPC, by default the name is "volatil"
+
+  * **rhel7-ami**.- The AMI to be used as base OS for the EC2 instances, by default this is a RHEL 7.7 in the Ireland region, if the region is changed, this value must also be changed accordingly, see the [EC2 instances section for details](#ec2-instances).  For example `-var="rhel7-ami=ami-0fb2dd0b481d4dc1a"`
+
+  * **ssh-keyfile**; **ssh-keyname**.- The name of the file containing the ssh key, created with the ssh-keygen command; and the name of the ssh key that will be used to reference it in AWS.
+
+* Deploy the infrastructure by running a command like the following in the Terraform directory, in this case a specific region and AMI are selected:
 
 ```
 $ terraform apply -var="region_name=eu-west-2" -var="rhel7-ami=ami-0fb2dd0b481d4dc1a"
 ```
 
-Run the prerequisites (prereqs-ocp.yml ) playbook. If the OS packages are to be updated, the variable **update_packages** must be set to true, in this case a reboot of the nodes is probably required.
-
+* Create an inventory file to run the prereqs-ocp.yml playbook.  This inventory file is not the one used to deploy the OCP cluster, that one will be created during the prereqs-ocp.yml playbook execution:
 
 ```
-$ cd Ansible
-$ ansible-playbook  --vault-id vault_id prereqs-ocp.yml 
+$ cd ../Ansible
+$ ./create_inventario.sh > inventory-prereq
 ```
+* Add the ssh private key to the ssh agent ring.  If ssh-agent is not running, start it first with:
+
+```
+$ ssh-agent bash
+```
+
+Add the key with:
+
+```
+$ ssh-add <path-to-private-key-file>
+```
+
+* Run the prerequisites (prereqs-ocp.yml ) playbook using the inventory file created in the previous step. If the OS packages in the nodes are going to be updated, the variable **update_packages** must be set to true, and the nodes must be rebooted after the playbook completes.
+
+```
+$ ansible-playbook  -i inventory-prereq --vault-id vault_id prereqs-ocp.yml 
+```
+
+* Review the inventory file and correct/modify as required, in particular:
+
+  * The version installed is 3.11.latest, if another z version is wanted, the following variables must be defined: **openshift_image_tag**; **openshift_pkg_version**
+
+  * The DNS subdomain name for the applications deployed in the cluster, this is defined in the variable **openshift_master_default_subdomain**
+
+* ssh to the bastion host and run the prerequisites and deploy cluster openshift playbook:
+
+```
+$ ssh -F ssh.cfg bastion.ocpext.rhcee.support
+bastion$ cd OCP311
+bastion$ ansible-playbook -vvv /usr/share/ansible/openshift-ansible/playbooks/prerequisites.yml
+bastion$ ansible-playbook -vvv /usr/share/ansible/openshift-ansible/playbooks/deploy_cluster.yml
+```
+
+### Cluster decommissioning instructions
+
+To delete the cluster and **all** its components, including the data stored in the S3 and ELB disks, a single command is required.
+
+```
+$ cd Terraform
+$ terraform destroy
+```
+
