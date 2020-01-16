@@ -3,41 +3,41 @@
 ### Table of contents
 [Reference documentation](#reference-documentation)
 
-[Terraform](#terraform)
+* [Terraform](#terraform)
 
-[Variables](#variables)
+  * [Variables](#variables)
 
-[VPC](#vpc)
+  * [VPC](#vpc)
 
-[EC2 instances](#ec2-instances)
+  * [EC2 instances](#ec2-instances)
 
-[Security Groups](#security-groups)
+  * [Security Groups](#security-groups)
 
-[Elastic Load Balancers](#elastic-load-balancers)
+  * [Elastic Load Balancers](#elastic-load-balancers)
 
-[DNS Route 53](#dns-route-53)
+  * [DNS Route 53](#dns-route-53)
 
-[S3 bucket](#s3-bucket)
+  * [S3 bucket](#s3-bucket)
 
-[IAM users](#iam-users)
+  * [IAM users](#iam-users)
 
-[Ansible](#ansible)
+* [Ansible](#ansible)
 
-[SSH connection through the bastion host](#ssh-connection-through-the-bastion-host)
+  * [SSH connection through the bastion host](#ssh-connection-through-the-bastion-host)
 
-[Ansible configuration file](#ansible-configuration-file)
+  * [Ansible configuration file](#ansible-configuration-file)
 
-[Inventory files](#inventory-files)
+  * [Inventory files](#inventory-files)
 
-[Prerequisites](#prerequisites)
+  * [Prerequisites](#prerequisites)
 
-[Tests](#tests)
+  * [Tests](#tests)
 
-[Storage management ](#storage-management )
+  * [Storage management ](#storage-management )
 
-[Cluster deployment instructions](#cluster-deployment-instructions)
+* [Cluster deployment instructions](#cluster-deployment-instructions)
 
-[Cluster decommissioning instructions](#cluster-decommissioning-instructions)
+* [Cluster decommissioning instructions](#cluster-decommissioning-instructions)
 
 
 ### Reference documentation
