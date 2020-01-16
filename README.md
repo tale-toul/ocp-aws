@@ -1,5 +1,27 @@
 ## Openshift 3.11 installation on AWS
 
+### Table of contents
+[Reference documentation](#reference-documentation)
+[Terraform](#terraform)
+[Variables](#variables)
+[VPC](#vpc)
+[EC2 instances](#ec2-instances)
+[Security Groups](#security-groups)
+[Elastic Load Balancers](#elastic-load-balancers)
+[DNS Route 53](#dns-route-53)
+[S3 bucket](#s3-bucket)
+[IAM users](#iam-users)
+[Ansible](#ansible)
+[SSH connection through the bastion host](#ssh-connection-through-the-bastion-host)
+[Ansible configuration file](#ansible-configuration-file)
+[Inventory files](#inventory-files)
+[Prerequisites](#prerequisites)
+[Tests](#tests)
+[Storage management ](#storage-management )
+[Cluster deployment instructions](#cluster-deployment-instructions)
+[Cluster decommissioning instructions](#cluster-decommissioning-instructions)
+
+
 ### Reference documentation
 
 https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites
@@ -397,7 +419,6 @@ The [OpenShift documentation](https://docs.openshift.com/container-platform/3.11
 
   Next the disk device used as backend storage for docker is updated in the **/etc/sysconfig/docker-storage-setup** by looking for the right device name and assigning it to a variable, then updating the line starting with **DEVS=** in the configuration filei. These tasks are always run, without previously verifying if the configuration is already correct, but ansible will actually not change the configuration file if this is already correct.  
 
-
 ### Cluster deployment instructions
 
 [Terraform](https://www.terraform.io/) and [Ansible](https://www.ansible.com/) must be installed in the host where the installation will be run from; an [AWS](https://aws.amazon.com/) account is needed to create the infrastructure elements; A [Red Hat](https://access.redhat.com) user account with entitlements for installing OpenShift is required. 
@@ -420,7 +441,7 @@ $ for x in {1..5}; do htpasswd -b htpasswd.openshift user${x} user${x}_password;
 * Create an ansible vault file with the following secret variables: 
 
   * **subscription_username**; **subscription_password**.- Username and password of the Red Hat user with the entitlements to subscribe nodes with Red Hat
-  * **oreg_auth_user**; **oreg_auth_password**.- Username and password of the user with access to the Red Hat container registry. See [here](https://access.redhat.com/RegistryAuthentication) to learn how to get a user.
+  * **oreg_auth_user**; **oreg_auth_password**.- Username and password of the user with access to the Red Hat container registry. Go [here](https://access.redhat.com/terms-based-registry/) to get or create a user account.
 
  An example file would look like:
 
@@ -452,10 +473,10 @@ Place the resulting encrypted file in the directory Ansible/group_vars/all
 
   * **ssh-keyfile**; **ssh-keyname**.- The name of the file containing the ssh key, created with the ssh-keygen command; and the name of the ssh key that will be used to reference it in AWS.
 
-* Deploy the infrastructure by running a command like the following in the Terraform directory, in this case a specific region and AMI are selected:
+* Deploy the infrastructure by running a **terraform apply** command in the Terraform directory.  In the following examples the region, AMI, node instance type, ssh key file name and ssh key name  are selected:
 
 ```
-$ terraform apply -var="region_name=eu-west-2" -var="rhel7-ami=ami-0fb2dd0b481d4dc1a"
+$ terraform apply -var="region_name=eu-west-3" -var="rhel7-ami=ami-0dc7b4dac85c15019" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
 ```
 
 * Create an inventory file to run the prereqs-ocp.yml playbook.  This inventory file is not the one used to deploy the OCP cluster, that one will be created during the prereqs-ocp.yml playbook execution:
