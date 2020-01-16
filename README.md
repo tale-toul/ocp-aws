@@ -2,23 +2,41 @@
 
 ### Table of contents
 [Reference documentation](#reference-documentation)
+
 [Terraform](#terraform)
+
 [Variables](#variables)
+
 [VPC](#vpc)
+
 [EC2 instances](#ec2-instances)
+
 [Security Groups](#security-groups)
+
 [Elastic Load Balancers](#elastic-load-balancers)
+
 [DNS Route 53](#dns-route-53)
+
 [S3 bucket](#s3-bucket)
+
 [IAM users](#iam-users)
+
 [Ansible](#ansible)
+
 [SSH connection through the bastion host](#ssh-connection-through-the-bastion-host)
+
 [Ansible configuration file](#ansible-configuration-file)
+
 [Inventory files](#inventory-files)
+
 [Prerequisites](#prerequisites)
+
 [Tests](#tests)
+
 [Storage management ](#storage-management )
+
 [Cluster deployment instructions](#cluster-deployment-instructions)
+
 [Cluster decommissioning instructions](#cluster-decommissioning-instructions)
 
 
