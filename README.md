@@ -491,10 +491,10 @@ Place the resulting encrypted file in the directory Ansible/group_vars/all
 
   * **ssh-keyfile**; **ssh-keyname**.- The name of the file containing the ssh key, created with the ssh-keygen command; and the name of the ssh key that will be used to reference it in AWS.
 
-* Deploy the infrastructure by running a **terraform apply** command in the Terraform directory.  In the following examples the region, AMI, node instance type, ssh key file name and ssh key name  are selected:
+* Deploy the infrastructure by running a **terraform apply** command in the Terraform directory.  In the following example the cluster name, region, AMI, node instance type, ssh key file name and ssh key name  are selected:
 
 ```
-$ terraform apply -var="region_name=eu-west-3" -var="rhel7-ami=ami-0dc7b4dac85c15019" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
+$ terraform apply -var="cluster_name=athena" -var="region_name=eu-west-3" -var="rhel7-ami=ami-0dc7b4dac85c15019" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
 ```
 
 * Create an inventory file to run the prereqs-ocp.yml playbook.  This inventory file is not the one used to deploy the OCP cluster, that one will be created during the prereqs-ocp.yml playbook execution:
@@ -536,12 +536,33 @@ bastion$ ansible-playbook -vvv /usr/share/ansible/openshift-ansible/playbooks/pr
 bastion$ ansible-playbook -vvv /usr/share/ansible/openshift-ansible/playbooks/deploy_cluster.yml
 ```
 
-### Cluster decommissioning instructions
+#### Accessing the cluster
 
-To delete the cluster and **all** its components, including the data stored in the S3 and ELB disks, a single command is required.
+The hostname that must be used to access the cluster is the one assigned to the public load balancer in front of the masters, this name can be obtained from the variable **openshift_master_cluster_public_hostname** in the inventory file, or the output variable **master_public_lb** in terraform:
 
 ```
 $ cd Terraform
-$ terraform destroy
+$ terraform output master_public_lb
+```
+The URL to access the cluster web console is `https://<openshift_master_cluster_public_hostname>`, for example:
+
+```
+https://master.ocpext.rhcee.support
 ```
 
+To login to the cluster with the **oc** command use `oc login -u <user> https://<openshift_master_cluster_public_hostname>`, for example:
+
+```
+$ oc login -u user1 https://master.ocpext.rhcee.support
+```
+
+### Cluster decommissioning instructions
+
+To delete the cluster and **all** its components, including the data stored in the S3 and ELB disks, use the `terraform destroy' command.  This command should include the same variable definitions that were used during cluster creation, not all variables are strictly requiered though:
+
+```
+$ cd Terraform
+$ terraform destroy -var="cluster_name=athena" -var="region_name=eu-west-3" -var="rhel7-ami=ami-0dc7b4dac85c15019" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
+```
+
+**WARNING** Terraform will only delete the resources it created, if other resources were added to the cluster later, outisde of terraform control terraform will not have any knowledge about those and will not delete them.  An example of this can be new nodes added to extend the cluster.  One particular type of resource that will likely be added to the cluster without terraform intervention is the EBS disks created when a PV or PVC is requested by the defalt storage class created during cluster deployment (gp2); These disks need to be destroyed by the cluster administrator in the AWS console, for example looking for the tag **kubernetes.io/cluster/${CLUSTER_NAME}**.
