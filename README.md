@@ -67,6 +67,8 @@ and the provider definition contains the following directive referencing the cre
 
 When using credentials files it is important to make sure that the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** are not defined in the session, otherwise extraneus errors will appear when running terraform.
 
+A second provider is defined to generate random vales, like the name of the S3 bucket for the registry, that must be unique in all AWS.
+ 
 Most of the resources created in AWS to deploy the OCP cluster require the tag named **Clusterid** with an identifier common to all elements. In this case the value of the tag is defined via a variable:
 
 ```
@@ -94,13 +96,11 @@ Variables are defined at the beginning of the file to simplify the rest of the c
 
 * **nodes-instance-type**.- Type of instance used for infra and worker nodes, define the hardware characteristics like memory, cpu, network capabilities
 
-* **rhel7-ami**.- AMI on which the EC2 instances are based on, this one is a RHEL 7.7 in the Ireland region.  This variable is region dependent, if the value of variable **region_name** is modified, this one must be updated too.
+* **rhel7-ami**.- This map variable defines the AMI on which the EC2 instances are based on depending on the region. This AMI is based on a RHEL 7.7.  
 
 * **ssh-keyfile**.- Name of the file with the public part of the SSH key to transfer to the EC2 instances
 
 * **ssh-keyname**.- Name of the key that will be imported into AWS
-
-* **registry-bucket-name**.- S3 registry bucket name
 
 * **user-data-masters**.- User data for master instances, contains cloud config directives to setup disks and partitions.
 
@@ -138,6 +138,8 @@ $ export AWS_SECRET_ACCESS_KEY=xxxxx
 $ aws ec2 describe-images --owners 309956199498 --filters "Name=is-public,Values=true" "Name=name,Values=RHEL*7.7*" --region eu-west-1
 ```
 The command searches for **public** amis in the eu-west-1 (Ireland) region with owner Red Hat (309956199498) that include in the name the string "RHEL*7.7*".  The output will contain a list of amis released at different dates and with minor differences among them.
+
+The terraform file uses a variable of type map to keep the correct ami IDs for each region, so it should not be necessary to look for the AMI.
 
 According to the [OpenShift installation documentation](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#hardware) a minimum available disk space is required in the partitions containing specific directories, also docker and OpenShift require available space to store ephemeral data and images, and in the case of the masters a separate disk is recommended to hold the data for etcd.  To comply with the previous requirements the root disk for the nodes is sized accordingly and additinal disks are added to the each master, infra and worker instance.  The additional disks are formated and mounted via a user data script that is passed to the instance during creation, one of the disks is used to create a volume group and logical volume to be used by docker.  It is important to take into consideration that the naming scheme for the devices created for the additional disks depends on the type of instance used; for example t3.xlarge will use devices like /devnvme1n1, while m4.xlarge will use /dev/xvdb
 
@@ -243,7 +245,20 @@ A few records have been created so far.
   
 #### S3 bucket
 
-An S3 bucket is created to be used as backend storage for the internal OpenShift image registry.  It is recommended to create the bucket in the same region as the rest of the resources, this is controlled through the variable **region_name**.  The name of the bucket must be unique across the whole AWS infrastructure so the variable **registry-bucket-name** has been defined to make it easy to change this name in every deployment.
+An S3 bucket is created to be used as backend storage for the internal OpenShift image registry.  It is created in the same region as the rest of the resources, this is controlled through the variable **region_name**.  
+
+The name of the bucket must be unique across the whole AWS infrastructure, so a **random_string** resource is defined to generate names of lengh 20 character, the characters will be only lowercase letters, numbers and hiphens (-):
+
+```
+resource "random_string" "bucket_name" {
+  length = 20
+  upper = false
+  override_special = "-"
+}
+```
+Later during the bucket definition the random name is generated `bucket = random_string.bucket_name.result`.  In other parts of the terraform manifest the same name is referenced with `${aws_s3_bucket.registry-bucket.id}`
+
+Terraform will not generate a new random string if we run the **terraform apply** command a second time when a previous S3 bucket has been created, so the S3 bucket will not be recreated.
 
 By default the non empty S3 buckets are not deleted by the command **terraform destroy**, this behaviour has been changed with the use of the argument **force_destroy = true** which forces terraform to destroy the S3 bucket even if this is not empty.
 
@@ -487,14 +502,12 @@ Place the resulting encrypted file in the directory Ansible/group_vars/all
    
   * **vpc_name**.- The name for the VPC, by default the name is "volatil"
 
-  * **rhel7-ami**.- The AMI to be used as base OS for the EC2 instances, by default this is a RHEL 7.7 in the Ireland region, if the region is changed, this value must also be changed accordingly, see the [EC2 instances section for details](#ec2-instances).  For example `-var="rhel7-ami=ami-0fb2dd0b481d4dc1a"`
-
   * **ssh-keyfile**; **ssh-keyname**.- The name of the file containing the ssh key, created with the ssh-keygen command; and the name of the ssh key that will be used to reference it in AWS.
 
 * Deploy the infrastructure by running a **terraform apply** command in the Terraform directory.  In the following example the cluster name, region, AMI, node instance type, ssh key file name and ssh key name  are selected:
 
 ```
-$ terraform apply -var="cluster_name=athena" -var="region_name=eu-west-3" -var="rhel7-ami=ami-0dc7b4dac85c15019" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
+$ terraform apply -var="cluster_name=athena" -var="region_name=eu-west-3" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
 ```
 
 * Create an inventory file to run the prereqs-ocp.yml playbook.  This inventory file is not the one used to deploy the OCP cluster, that one will be created during the prereqs-ocp.yml playbook execution:
@@ -562,7 +575,7 @@ To delete the cluster and **all** its components, including the data stored in t
 
 ```
 $ cd Terraform
-$ terraform destroy -var="cluster_name=athena" -var="region_name=eu-west-3" -var="rhel7-ami=ami-0dc7b4dac85c15019" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
+$ terraform destroy -var="cluster_name=athena" -var="region_name=eu-west-3" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
 ```
 
 **WARNING** 

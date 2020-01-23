@@ -7,6 +7,11 @@ provider "aws" {
   shared_credentials_file = "redhat-credentials.ini"
 }
 
+#This is only used to generate random values
+provider "random" {
+  version = "~> 2.2"
+}
+
 #VARIABLES
 variable "region_name" {
   description = "AWS Region where the cluster is deployed"
@@ -79,12 +84,6 @@ variable "ssh-keyname" {
   description = "Name of the key that will be imported into AWS"
   type = string
   default = "ssh-key"
-}
-
-variable "registry-bucket-name" {
-  description = "S3 registry bucket name"
-  type = string
-  default = "registry-tale-bucket"
 }
 
 variable "user-data-masters" {
@@ -1205,9 +1204,17 @@ resource "aws_route53_record" "master-int" {
 }
 
 #S3 BUCKETS
+
+#Provides a source to create a random name for the S3 bucket
+resource "random_string" "bucket_name" {
+  length = 20
+  upper = false
+  override_special = "-"
+}
+
 #Registry Bucket
 resource "aws_s3_bucket" "registry-bucket" {
-  bucket = var.registry-bucket-name
+  bucket = random_string.bucket_name.result
   region = var.region_name
   force_destroy = true
 
@@ -1309,7 +1316,7 @@ resource "aws_iam_user_policy" "policy-registry" {
         "s3:GetBucketLocation",
         "s3:ListBucketMultipartUploads"
       ],
-      "Resource": "arn:aws:s3:::${var.registry-bucket-name}"
+      "Resource": "arn:aws:s3:::${aws_s3_bucket.registry-bucket.id}"
     },
     {
       "Effect": "Allow",
@@ -1320,7 +1327,7 @@ resource "aws_iam_user_policy" "policy-registry" {
         "s3:ListMultipartUploadParts",
         "s3:AbortMultipartUpload"
       ],
-      "Resource": "arn:aws:s3:::${var.registry-bucket-name}/*"
+      "Resource": "arn:aws:s3:::${aws_s3_bucket.registry-bucket.id}/*"
     }
   ]
 }
