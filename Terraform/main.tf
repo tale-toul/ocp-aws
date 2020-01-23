@@ -47,9 +47,26 @@ variable "nodes-instance-type" {
 }
 
 variable "rhel7-ami" {
-  description = "AMI on which the EC2 instances are based on, this one is a RHEL 7.7 in the Ireland region"
-  type = string
-  default = "ami-0404b890c57861c2d"
+  description = "AMI on which the EC2 instances are based on, depends on the region"
+  type = map
+  default = {
+    eu-central-1   = "ami-0b5edb134b768706c"
+    eu-west-1      = "ami-0404b890c57861c2d"
+    eu-west-2      = "ami-0fb2dd0b481d4dc1a"
+    eu-west-3      = "ami-0dc7b4dac85c15019"
+    eu-north-1     = "ami-030b10a31b2b6df19"
+    us-east-1      = "ami-0e9678b77e3f7cc96"
+    us-east-2      = "ami-0170fc126935d44c3"
+    us-west-1      = "ami-0d821453063a3c9b1"
+    us-west-2      = "ami-0c2dfd42fa1fbb52c"
+    sa-east-1      = "ami-09de00221562b0155"
+    ap-south-1     = "ami-0ec8900bf6d32e0a8"
+    ap-northeast-1 = "ami-0b355f24363d9f357"
+    ap-northeast-2 = "ami-0bd7fd9221135c533"
+    ap-southeast-1 = "ami-097e78d10c4722996"
+    ap-southeast-2 = "ami-0f7bc77e719f87581"
+    ca-central-1   = "ami-056db5ae05fa26d11"
+  }
 }
 
 variable "ssh-keyfile" {
@@ -763,7 +780,7 @@ resource "aws_key_pair" "ssh-key" {
 
 #Bastion host
 resource "aws_instance" "tale_bastion" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = "t2.medium"
   subnet_id = aws_subnet.subnet1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
@@ -784,7 +801,7 @@ resource "aws_instance" "tale_bastion" {
 
 #Masters
 resource "aws_instance" "tale_mast01" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
@@ -823,7 +840,7 @@ resource "aws_instance" "tale_mast01" {
 }
 
 resource "aws_instance" "tale_mast02" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
@@ -862,7 +879,7 @@ resource "aws_instance" "tale_mast02" {
 }
 
 resource "aws_instance" "tale_mast03" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
@@ -902,7 +919,7 @@ resource "aws_instance" "tale_mast03" {
 
 #Infras
 resource "aws_instance" "tale_infra01" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
@@ -936,7 +953,7 @@ resource "aws_instance" "tale_infra01" {
 }
 
 resource "aws_instance" "tale_infra02" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
@@ -969,7 +986,7 @@ resource "aws_instance" "tale_infra02" {
   }
 }
 resource "aws_instance" "tale_infra03" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
@@ -1004,7 +1021,7 @@ resource "aws_instance" "tale_infra03" {
 
 #Workers
 resource "aws_instance" "tale_worker01" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv1.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
@@ -1037,7 +1054,7 @@ resource "aws_instance" "tale_worker01" {
 }
 
 resource "aws_instance" "tale_worker02" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv2.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
@@ -1070,7 +1087,7 @@ resource "aws_instance" "tale_worker02" {
 }
 
 resource "aws_instance" "tale_worker03" {
-  ami = var.rhel7-ami
+  ami = var.rhel7-ami[var.region_name]
   instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_priv3.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
