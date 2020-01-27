@@ -23,7 +23,7 @@
 
   * [Component creation with loops](#component-creation-with-loops)
 
-    * [Placing infras and workers](#placing_infras_and_workers)
+    * [Placing infras and workers](#placing-infras-and-workers)
 
 * [Ansible](#ansible)
 
@@ -95,62 +95,6 @@ In addition to the tag Clusterid, the EC2 instances also require the following t
 "kubernetes.io/cluster/${var.cluster_name}" = "owned"
 ```
 
-#### Component creation with loops
-
-Many of the components in the infrastructure are instantiated more than once to add high availability and possibly load balancing to the cluster, this is the case of the availability zones, subnets, nat gateways, master infra and worker instances, etc.  In all cases the instances of these components are similar so it is possible to use a loop to create them instead of using a definition block for each one; with the use of loops the terraform manifest is more compact an aesier to maintain.  In the case of the infra and worker instances the number is controlled by variables (**infra_count**, **worker_count**) with a default value of 3, but they can be modified by the user to create the desired amount of infra and worker nodes.
-
-Other components, like the subnets, are fixed to a number of 3, to refelec the number of availability zones in most of the regions.  
-
-The loop to create the components is controlled by the internal variable **count** that contains the number of instances to be created, this variable contains an atribute **count.index**, that gets assigned the number of the instance being created as the loop progresses, this index can be used to reference other components with the same index.  In the following example 3 subnets are created, called subnet_pub.0, subnet_pub.1, subnet_put.2, each one of them will be assosiated with the corresponding availability zone in the region, extracted from the list **avb-zones.names** in the same index position.  The tag **Name** is also asigned a name that contains the index of the element in the loop.
-```
-resource "aws_subnet" "subnet_pub" {
-    count = 3
-    ...
-    availability_zone = data.aws_availability_zones.avb-zones.names[count.index]
-    tags = {
-        Name = "subnet_pub.${count.index}"
-    ...
-    }
-}
-```
-
-The **count.index** variable when used within a string is called with the expression **${count.index}**; when called as part of a list index uses the format [count.index], as seen in the example above.
-
-When a particular resource is created using a loop, the result is a list, in the previous example the reosource **aws_subnet.subnet_pub** is a list of subnets; if a reference to all the elements of that list is required, a _splat_ reference is used:
-
-```
-subnets = aws_subnet.subnet_pub[*].id
-```
-
-This is equivalent to 
-
-```
-subnets = aws_subnet.subnet_pub[0].id, aws_subnet.subnet_pub[1].id, aws_subnet.subnet_pub[2].id
-```
-
-When resources are created with loops, the output variables will accordingly accept and show list:
-
-```
-output "infras_ip" {
-   value = aws_instance.infra[*].private_ip
-```
-
-This requires a special approach in the proccessing of the output when used by the [create_inventario.sh](#inventory-files) script
-
-
-##### Placing infras and workers
-
-When there is not a 1 to 1 match between the number of instances to be assigned to another resource, for example the number of nodes is different from the number of subnets to place them in, the **element** function can be used; this function accepts a list and a number, and extracts from the list the element in the index position referenced by the number, if the number is greater than the maximum index position it is wrapped around and starts at the beggining of the list, for example if the number is 4 in a 3 element list, the returnded element by the function will be the one at position 2, consider that indexes start counting at 0.
-```
-resource "aws_instance" "infra" {
-   count = var.infra_count
-   ...
-   subnet_id = element(aws_subnet.subnet_priv[*].id,count.index)
-
-```
-
-With the use of the element function the instances will be evenly spread across the subnets in the region.
-
 #### Variables
 
 Variables are defined at the beginning of the file to simplify the rest of the configuration, it is enough to modify its values to change the configuration of the infrastructure deployed by terraform:
@@ -172,6 +116,8 @@ Variables are defined at the beginning of the file to simplify the rest of the c
 * **ssh-keyfile**.- Name of the file with the public part of the SSH key to transfer to the EC2 instances
 
 * **ssh-keyname**.- Name of the key that will be imported into AWS
+
+* **master_count**.- Number of master nodes in the OCP cluser, can only be 1 or 3
 
 * **infra_count**.- Number of node instance to be used as infras in the OCP cluster
 
@@ -347,6 +293,70 @@ Two IAM users are created to be used by the installation playbooks, and later by
 
 In the output section there are entries to print the access key ID and access key secret of these two IAM users, this information should be considered restricted.
 
+#### Component creation with loops
+
+Many of the components in the infrastructure are instantiated more than once to add high availability and possibly load balancing to the cluster, this is the case of the availability zones, subnets, nat gateways, master infra and worker instances, etc.  In all cases the instances of these components are similar so it is possible to use a loop to create them instead of using a definition block for each one; with the use of loops the terraform manifest is more compact an aesier to maintain.  In the case of the infra and worker instances the number is controlled by variables (**infra_count**, **worker_count**) with a default value of 3, but they can be modified by the user to create the desired amount of infra and worker nodes.
+
+Other components, like the subnets, are fixed to a number of 3, to refelec the number of availability zones in most of the regions.  
+
+The loop to create the components is controlled by the internal variable **count** that contains the number of instances to be created, this variable contains an atribute **count.index**, that gets assigned the number of the instance being created as the loop progresses, this index can be used to reference other components with the same index.  In the following example 3 subnets are created, called subnet_pub.0, subnet_pub.1, subnet_put.2, each one of them will be assosiated with the corresponding availability zone in the region, extracted from the list **avb-zones.names** in the same index position.  The tag **Name** is also asigned a name that contains the index of the element in the loop.
+```
+resource "aws_subnet" "subnet_pub" {
+    count = 3
+    ...
+    availability_zone = data.aws_availability_zones.avb-zones.names[count.index]
+    tags = {
+        Name = "subnet_pub.${count.index}"
+    ...
+    }
+}
+```
+
+The **count.index** variable when used within a string is called with the expression **${count.index}**; when called as part of a list index uses the format [count.index], as seen in the example above.
+
+When a particular resource is created using a loop, the result is a list, in the previous example the reosource **aws_subnet.subnet_pub** is a list of subnets; if a reference to all the elements of that list is required, a _splat_ reference is used:
+
+```
+subnets = aws_subnet.subnet_pub[*].id
+```
+
+This is equivalent to 
+
+```
+subnets = aws_subnet.subnet_pub[0].id, aws_subnet.subnet_pub[1].id, aws_subnet.subnet_pub[2].id
+```
+
+Master nodes are a special case of loop creation, only two values are permited for the variable controlling the loop (**master_count**), either 1 or 3.  This variable has a default value of 3, alternatively admits the value 1, any other value will default back to 3 masters.  Even when the value assigned is 1, the variable will still be a list:
+
+```
+resource "aws_instance" "master" {
+  count = var.master_count == 1 || var.master_count == 3 ? var.master_count : 3
+...
+```
+
+When resources are created with loops, the output variables will accordingly accept and show list:
+
+```
+output "infras_ip" {
+   value = aws_instance.infra[*].private_ip
+```
+
+This requires a special approach in the proccessing of the output when used by the [create_inventario.sh](#inventory-files) script
+
+
+##### Placing infras and workers
+
+When there is not a 1 to 1 match between the number of instances to be assigned to another resource, for example the number of nodes is different from the number of subnets to place them in, the **element** function can be used; this function accepts a list and a number, and extracts from the list the element in the index position referenced by the number, if the number is greater than the maximum index position it is wrapped around and starts at the beggining of the list, for example if the number is 4 in a 3 element list, the returnded element by the function will be the one at position 2, consider that indexes start counting at 0.
+```
+resource "aws_instance" "infra" {
+   count = var.infra_count
+   ...
+   subnet_id = element(aws_subnet.subnet_priv[*].id,count.index)
+
+```
+
+With the use of the element function the instances will be evenly spread across the subnets in the region.
+
 ### Ansible
 
 An ansible playbook is used to prepare the hosts before actually running the official cluster deployment playbooks.
@@ -416,6 +426,7 @@ callback_whitelist = profile_tasks, timer
 any_errors_fatal = True
 timeout = 30
 forks=10
+gathering = smart
 
 [privilege_escalation]
 become=true
@@ -424,6 +435,7 @@ become_method=sudo
 
 [ssh_connection]
 ssh_args = -F ./ssh.cfg -C -o ControlMaster=auto -o ControlPersist=60s
+pipelining = True
 ```
 In the **default** section:
 inventory=inventario.- The default inventory file that ansible will look for is called **inventario**
@@ -433,12 +445,14 @@ callback_whitelist = profile_tasks, timer.- Time marks will be shown along the p
 any_errors_fatal = True.- Any error in any task will cause the whole playbook to stop after the failing task.
 timeout = 30.- Time out for the ssh connections.
 forks=10.- Up to 10 host can run any task in parrallel.
+gathering=smart.- Facts will only be collected for nodes that have not been yet been contacted.
 
 In the **privilege_escalation** section:
 All tasks will be run via sudo as root
 
 In the **ssh_connection** section:
 The ssh connections will use a specific configuration file, plus additional options that are usually included as default configuration in ansible.
+pipelining=True.- SSH connections will be reused by subsequent tasks.
 
 #### Inventory files
 
@@ -589,6 +603,8 @@ Place the resulting encrypted file in the directory Ansible/group_vars/all
   * **vpc_name**.- The name for the VPC, by default the name is "volatil"
 
   * **ssh-keyfile**; **ssh-keyname**.- The name of the file containing the ssh key, created with the ssh-keygen command; and the name of the ssh key that will be used to reference it in AWS.
+
+  * **master_count**; **infra_count**; **worker_count**.- Number of master (1 or 3), infra and worker nodes.
 
 * Deploy the infrastructure by running a **terraform apply** command in the Terraform directory.  In the following example the cluster name, region, AMI, node instance type, ssh key file name and ssh key name  are selected:
 

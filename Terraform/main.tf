@@ -86,6 +86,12 @@ variable "ssh-keyname" {
   default = "ssh-key"
 }
 
+variable "master_count" {
+  description = "Number of master nodes in the OCP cluser, can only be 1 or 3"
+  type = number
+  default = 3
+}
+
 variable "infra_count" {
   description = "Number of node instance to be used as infras in the OCP cluster"
   type = number
@@ -664,7 +670,7 @@ resource "aws_instance" "tale_bastion" {
 
 #Masters
 resource "aws_instance" "master" {
-  count = 3
+  count = var.master_count == 1 || var.master_count == 3 ? var.master_count : 3
   ami = var.rhel7-ami[var.region_name]
   instance_type = var.master-instance-type
   subnet_id = aws_subnet.subnet_priv[count.index].id
