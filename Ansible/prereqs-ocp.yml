@@ -12,7 +12,7 @@
           args:
             chdir: ../Terraform
         - name: Add internal DNS domain to terraform vars
-          shell: (echo -n 'aws_internal_domain:'; echo -n ' '; terraform output master01_name|cut -d. -f2-) >> ../Ansible/group_vars/all/terraform_outputs.var
+          shell: (echo -n 'aws_internal_domain:'; echo -n ' '; terraform output masters_name|egrep -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'|head -1|cut -d. -f2-) >> ../Ansible/group_vars/all/terraform_outputs.var
           args:
             chdir: ../Terraform
         - name: Load terraform output variables

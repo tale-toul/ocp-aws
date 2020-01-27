@@ -21,6 +21,10 @@
 
   * [IAM users](#iam-users)
 
+  * [Component creation with loops](#component-creation-with-loops)
+
+    * [Placing infras and workers](#placing_infras_and_workers)
+
 * [Ansible](#ansible)
 
   * [SSH connection through the bastion host](#ssh-connection-through-the-bastion-host)
@@ -40,17 +44,28 @@
 * [Cluster decommissioning instructions](#cluster-decommissioning-instructions)
 
 
-### Reference documentation
+### Introduction
 
-https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites
+This project is meant to help you deploy an OpenSift 3.11 cluster in AWS in the most automated way possible.  
 
-https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf
+The architecture is based on the following documentation by Red Hat:
+
+[https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites](https://access.redhat.com/documentation/en-us/reference_architectures/2018/html/deploying_and_managing_openshift_3.9_on_amazon_web_services/red_hat_openshift_container_platform_prerequisites)
+
+[https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf](https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf)
+
+The deployment consists of 3 main phases:
+
+ * Infrastructure creation.- Through a terraform manifest, the infraestructure required to support the cluster is created in AWS.
+
+ * Initial set up.- Through an ansible playbook, the node instances created in the previous step are set up so an OCP 3.11 cluster can be deployed in them
+
+ * Cluster deployment.- Using the standar installation playbooks for OCP 3.11 the cluster is deployed.
+
 
 ### Terraform
 
 The Terraform directory contains the neccessary files to create the infrastructure required to install an OCP 3.11 cluster in AWS.
-
-The architecture used is based on the one descrived in [this reference document](https://access.redhat.com/sites/default/files/attachments/ocp-on-aws-8.pdf) from Red Hat.
 
 One provider is defined (https://www.terraform.io/docs/configuration/providers.html) to create the resources in AWS.  A credentials file containing the access key ID and the access key secret is created with the following format:
 
@@ -80,6 +95,62 @@ In addition to the tag Clusterid, the EC2 instances also require the following t
 "kubernetes.io/cluster/${var.cluster_name}" = "owned"
 ```
 
+#### Component creation with loops
+
+Many of the components in the infrastructure are instantiated more than once to add high availability and possibly load balancing to the cluster, this is the case of the availability zones, subnets, nat gateways, master infra and worker instances, etc.  In all cases the instances of these components are similar so it is possible to use a loop to create them instead of using a definition block for each one; with the use of loops the terraform manifest is more compact an aesier to maintain.  In the case of the infra and worker instances the number is controlled by variables (**infra_count**, **worker_count**) with a default value of 3, but they can be modified by the user to create the desired amount of infra and worker nodes.
+
+Other components, like the subnets, are fixed to a number of 3, to refelec the number of availability zones in most of the regions.  
+
+The loop to create the components is controlled by the internal variable **count** that contains the number of instances to be created, this variable contains an atribute **count.index**, that gets assigned the number of the instance being created as the loop progresses, this index can be used to reference other components with the same index.  In the following example 3 subnets are created, called subnet_pub.0, subnet_pub.1, subnet_put.2, each one of them will be assosiated with the corresponding availability zone in the region, extracted from the list **avb-zones.names** in the same index position.  The tag **Name** is also asigned a name that contains the index of the element in the loop.
+```
+resource "aws_subnet" "subnet_pub" {
+    count = 3
+    ...
+    availability_zone = data.aws_availability_zones.avb-zones.names[count.index]
+    tags = {
+        Name = "subnet_pub.${count.index}"
+    ...
+    }
+}
+```
+
+The **count.index** variable when used within a string is called with the expression **${count.index}**; when called as part of a list index uses the format [count.index], as seen in the example above.
+
+When a particular resource is created using a loop, the result is a list, in the previous example the reosource **aws_subnet.subnet_pub** is a list of subnets; if a reference to all the elements of that list is required, a _splat_ reference is used:
+
+```
+subnets = aws_subnet.subnet_pub[*].id
+```
+
+This is equivalent to 
+
+```
+subnets = aws_subnet.subnet_pub[0].id, aws_subnet.subnet_pub[1].id, aws_subnet.subnet_pub[2].id
+```
+
+When resources are created with loops, the output variables will accordingly accept and show list:
+
+```
+output "infras_ip" {
+   value = aws_instance.infra[*].private_ip
+```
+
+This requires a special approach in the proccessing of the output when used by the [create_inventario.sh](#inventory-files) script
+
+
+##### Placing infras and workers
+
+When there is not a 1 to 1 match between the number of instances to be assigned to another resource, for example the number of nodes is different from the number of subnets to place them in, the **element** function can be used; this function accepts a list and a number, and extracts from the list the element in the index position referenced by the number, if the number is greater than the maximum index position it is wrapped around and starts at the beggining of the list, for example if the number is 4 in a 3 element list, the returnded element by the function will be the one at position 2, consider that indexes start counting at 0.
+```
+resource "aws_instance" "infra" {
+   count = var.infra_count
+   ...
+   subnet_id = element(aws_subnet.subnet_priv[*].id,count.index)
+
+```
+
+With the use of the element function the instances will be evenly spread across the subnets in the region.
+
 #### Variables
 
 Variables are defined at the beginning of the file to simplify the rest of the configuration, it is enough to modify its values to change the configuration of the infrastructure deployed by terraform:
@@ -102,6 +173,10 @@ Variables are defined at the beginning of the file to simplify the rest of the c
 
 * **ssh-keyname**.- Name of the key that will be imported into AWS
 
+* **infra_count**.- Number of node instance to be used as infras in the OCP cluster
+
+* **worker_count**.- Number of node instance to be used as workers in the OCP cluster
+
 * **user-data-masters**.- User data for master instances, contains cloud config directives to setup disks and partitions.
 
 * **user-data-nodes**.- User data for worker and infra nodes instances, contains cloud config directives to setup disks and partitions.
@@ -114,7 +189,7 @@ Six subnets are created to leverage the High Availavility provided by the Availa
 
 An internet gateway is created to provide access to and from the Internet.  For the EC2 instances in the public subnets to be able to use it, a route table is created with a default route pointing to the internet gateway, then an association is made between each public subnet and the route table.
 
-3 NAT gateways are created and placed one on each of the public subnets, they are used to provide access to the Inernet to the EC2 instances in the private subnets, this way those EC2 instances will be able to access the ouside world, for example to download images, but the outside world will not be able to access the EC2 instances.  An Elastic IP is created and assigned to each one of the NAT gateways.  For the EC2 instances in the private networks to be able to use the NAT gateways, 3 route tables are created with a default route pointing to one of the NAT gateways, then an association is made between one private subnet and the corresponding route table; in the end there will be a route table associated to each private subnet pointing to one of the NAT gateways.
+3 NAT gateways are created and placed, one on each of the public subnets, they are used to provide access to the Inernet to the EC2 instances in the private subnets, this way those EC2 instances will be able to access the ouside world for example to download images, but the outside world will not be able to access the EC2 instances.  An Elastic IP is created and assigned to each one of the NAT gateways.  For the EC2 instances in the private networks to be able to use the NAT gateways, 3 route tables are created with a default route pointing to one of the NAT gateways, then an association is made between one private subnet and the corresponding route table; in the end there will be a route table associated to each private subnet pointing to one of the NAT gateways.
 
 #### EC2 instances
 
@@ -369,8 +444,19 @@ The ssh connections will use a specific configuration file, plus additional opti
 
 Two different inventory files are used during the cluster deployment:
 
-* A simple inventory file that is used by the **prereqs-ocp.yml**, basically containing the list of all hosts in the cluster, including the bastion host, grouped by the sections that will be used later in the deploy cluster inventory file. This inventory file is generated by the script **Ansible/create_inventario.sh** which gathers the data from the terraform output.  This inventory file must be recreated every time the infrastructure is created with terraform.
+* A simple inventory file that is used by the **prereqs-ocp.yml**, basically containing the list of all hosts in the cluster, including the bastion host, grouped by the sections that will be used later in the deploy cluster inventory file. This inventory file is generated by the script **Ansible/create_inventario.sh** which gathers the data from the terraform output.  This inventory file must be recreated every time a new infrastructure is created with terraform.  
 
+When using [loops](#component-creation-with-loops) in terraform to create the instances, the list of hostnames is saved in an array ignoring lines with square brackets and removing quotes and commas, later the contentes of the array are printed. 
+
+```
+for host in $(terraform output -state=$TERRAFORM_STATE masters_name|egrep -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'); do
+  masters+=($host)
+done
+...
+for x in ${masters[@]}; do
+  echo " $x"
+done
+```
 * A complete inventory file used by the deploy_cluster.yml playbook.  This inventory file is created by the **prereqs-ocp.yml** playbook from two different sources: 
 
   * A jinja2 template containing the sections **[OSEv3:children]** and **[OSEv3:vars]**, that is rendered in the **prereqs-ocp.yml** playbook. The variables used in the templated are populated from the data generated by the `terraform output` command, and are updated every time new infrastructure is generate by terraform. 

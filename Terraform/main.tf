@@ -86,6 +86,18 @@ variable "ssh-keyname" {
   default = "ssh-key"
 }
 
+variable "infra_count" {
+  description = "Number of node instance to be used as infras in the OCP cluster"
+  type = number
+  default = 3
+}
+
+variable "worker_count" {
+  description = "Number of node instance to be used as workers in the OCP cluster"
+  type = number
+  default = 3
+}
+
 variable "user-data-masters" {
   description = "User data for master instances"
   type = string
@@ -185,82 +197,34 @@ data "aws_availability_zones" "avb-zones" {
   state = "available"
 }
 
-resource "aws_subnet" "subnet1" {
+#Public subnets
+resource "aws_subnet" "subnet_pub" {
+    count = 3
     vpc_id = aws_vpc.vpc.id
-    availability_zone = data.aws_availability_zones.avb-zones.names[0]
-    cidr_block = "172.20.1.0/24"
+    availability_zone = data.aws_availability_zones.avb-zones.names[count.index]
+    cidr_block = "172.20.5${count.index}.0/24"
     map_public_ip_on_launch = true
 
     tags = {
-        Name = "subnet1"
+        Name = "subnet_pub.${count.index}"
         Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
 
-resource "aws_subnet" "subnet2" {
-    vpc_id = aws_vpc.vpc.id
-    availability_zone = data.aws_availability_zones.avb-zones.names[1]
-    cidr_block = "172.20.2.0/24"
-    map_public_ip_on_launch = true
+#Private subnets
+resource "aws_subnet" "subnet_priv" {
+  count = 3
+  vpc_id = aws_vpc.vpc.id
+  availability_zone = data.aws_availability_zones.avb-zones.names[count.index]
+  cidr_block = "172.20.1${count.index}.0/24"
+  map_public_ip_on_launch = false
 
-    tags = {
-        Name = "subnet2"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_subnet" "subnet3" {
-    vpc_id = aws_vpc.vpc.id
-    availability_zone = data.aws_availability_zones.avb-zones.names[2]
-    cidr_block = "172.20.3.0/24"
-    map_public_ip_on_launch = true
-
-    tags = {
-        Name = "subnet3"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_subnet" "subnet_priv1" {
-    vpc_id = aws_vpc.vpc.id
-    availability_zone = data.aws_availability_zones.avb-zones.names[0]
-    cidr_block = "172.20.10.0/24"
-    map_public_ip_on_launch = false
-
-    tags = {
-        Name = "subnet_priv1"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_subnet" "subnet_priv2" {
-    vpc_id = aws_vpc.vpc.id
-    availability_zone = data.aws_availability_zones.avb-zones.names[1]
-    cidr_block = "172.20.20.0/24"
-    map_public_ip_on_launch = false
-
-    tags = {
-        Name = "subnet_priv2"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_subnet" "subnet_priv3" {
-    vpc_id = aws_vpc.vpc.id
-    availability_zone = data.aws_availability_zones.avb-zones.names[2]
-    cidr_block = "172.20.30.0/24"
-    map_public_ip_on_launch = false
-
-    tags = {
-        Name = "subnet_priv3"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
+  tags = {
+      Name = "subnet_priv.${count.index}"
+      Clusterid = var.cluster_name
+      Project = "OCP-CAM"
+  }
 }
 
 #INTERNET GATEWAY
@@ -275,31 +239,14 @@ resource "aws_internet_gateway" "intergw" {
 }
 
 #EIPS
-resource "aws_eip" "nateip1" { 
-    vpc = true
-    tags = {
-        Name = "nateip1"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_eip" "nateip2" { 
-    vpc = true
-    tags = {
-        Name = "nateip2"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_eip" "nateip3" { 
-    vpc = true
-    tags = {
-        Name = "nateip3"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
+resource "aws_eip" "nateip" {
+  count = 3
+  vpc = true
+  tags = {
+      Name = "nateip.${count.index}"
+      Clusterid = var.cluster_name
+      Project = "OCP-CAM"
+  }
 }
 
 resource "aws_eip" "bastion_eip" {
@@ -314,40 +261,14 @@ resource "aws_eip" "bastion_eip" {
 }
 
 #NAT GATEWAYs
-resource "aws_nat_gateway" "natgw1" {
-    allocation_id = aws_eip.nateip1.id
-    subnet_id = aws_subnet.subnet1.id
-
+resource "aws_nat_gateway" "natgw" {
+    count = 3
+    allocation_id = aws_eip.nateip[count.index].id
+    subnet_id = aws_subnet.subnet_pub[count.index].id
     depends_on = [aws_internet_gateway.intergw]
 
     tags = {
-        Name = "natgw1"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_nat_gateway" "natgw2" {
-    allocation_id = aws_eip.nateip2.id
-    subnet_id = aws_subnet.subnet2.id
-
-    depends_on = [aws_internet_gateway.intergw]
-
-    tags = {
-        Name = "natgw2"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_nat_gateway" "natgw3" {
-    allocation_id = aws_eip.nateip3.id
-    subnet_id = aws_subnet.subnet3.id
-
-    depends_on = [aws_internet_gateway.intergw]
-
-    tags = {
-        Name = "natgw3"
+        Name = "natgw.${count.index}"
         Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
@@ -370,78 +291,33 @@ resource "aws_route_table" "rtable_igw" {
 }
 
 #Route table associations
-resource "aws_route_table_association" "rtabasso_subnet1" {
-    subnet_id = aws_subnet.subnet1.id
-    route_table_id = aws_route_table.rtable_igw.id
-}
-
-resource "aws_route_table_association" "rtabasso_subnet2" {
-    subnet_id = aws_subnet.subnet2.id
-    route_table_id = aws_route_table.rtable_igw.id
-}
-
-resource "aws_route_table_association" "rtabasso_subnet3" {
-    subnet_id = aws_subnet.subnet3.id
+resource "aws_route_table_association" "rtabasso_subnet_pub" {
+    count = 3
+    subnet_id = aws_subnet.subnet_pub[count.index].id
     route_table_id = aws_route_table.rtable_igw.id
 }
 
 #Route tables: Out bound Internet access for private networks
-resource "aws_route_table" "rtable_priv1" {
+resource "aws_route_table" "rtable_priv" {
+    count = 3
     vpc_id = aws_vpc.vpc.id
 
     route {
         cidr_block = "0.0.0.0/0"
-        gateway_id = aws_nat_gateway.natgw1.id
+        gateway_id = aws_nat_gateway.natgw[count.index].id
     }
     tags = {
-        Name = "rtable_priv1"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_route_table" "rtable_priv2" {
-    vpc_id = aws_vpc.vpc.id
-
-    route {
-        cidr_block = "0.0.0.0/0"
-        gateway_id = aws_nat_gateway.natgw2.id
-    }
-    tags = {
-        Name = "rtable_priv2"
-        Clusterid = var.cluster_name
-        Project = "OCP-CAM"
-    }
-}
-
-resource "aws_route_table" "rtable_priv3" {
-    vpc_id = aws_vpc.vpc.id
-
-    route {
-        cidr_block = "0.0.0.0/0"
-        gateway_id = aws_nat_gateway.natgw3.id
-    }
-    tags = {
-        Name = "rtable_priv3"
+        Name = "rtable_priv.${count.index}"
         Clusterid = var.cluster_name
         Project = "OCP-CAM"
     }
 }
 
 #Route table associations 
-resource "aws_route_table_association" "rtabasso_nat_priv1" {
-    subnet_id = aws_subnet.subnet_priv1.id
-    route_table_id = aws_route_table.rtable_priv1.id
-}
-
-resource "aws_route_table_association" "rtabasso_nat_priv2" {
-    subnet_id = aws_subnet.subnet_priv2.id
-    route_table_id = aws_route_table.rtable_priv2.id
-}
-
-resource "aws_route_table_association" "rtabasso_nat_priv3" {
-    subnet_id = aws_subnet.subnet_priv3.id
-    route_table_id = aws_route_table.rtable_priv3.id
+resource "aws_route_table_association" "rtabasso_nat_priv" {
+    count = 3
+    subnet_id = aws_subnet.subnet_priv[count.index].id
+    route_table_id = aws_route_table.rtable_priv[count.index].id
 }
 
 #SECURITY GROUPS
@@ -655,12 +531,8 @@ resource "aws_elb" "elb-master-public" {
   connection_draining = false
   security_groups    = [aws_security_group.sg-master.id,
                         aws_security_group.sg-all-out.id]
-  subnets            = [aws_subnet.subnet1.id,
-                        aws_subnet.subnet2.id,
-                        aws_subnet.subnet3.id]
-  instances = [aws_instance.tale_mast01.id,
-               aws_instance.tale_mast02.id,
-               aws_instance.tale_mast03.id]
+  subnets            = aws_subnet.subnet_pub[*].id
+  instances = aws_instance.master[*].id 
 
   listener {
       instance_port     = 443
@@ -698,12 +570,8 @@ resource "aws_elb" "elb-master-private" {
   connection_draining = false
   security_groups    = [aws_security_group.sg-master.id,
                         aws_security_group.sg-all-out.id]
-  subnets            = [aws_subnet.subnet_priv1.id,
-                        aws_subnet.subnet_priv2.id,
-                        aws_subnet.subnet_priv3.id]
-  instances = [aws_instance.tale_mast01.id,
-               aws_instance.tale_mast02.id,
-               aws_instance.tale_mast03.id]
+  subnets            = aws_subnet.subnet_priv[*].id
+  instances = aws_instance.master[*].id
 
   listener {
       instance_port     = 443
@@ -734,12 +602,8 @@ resource "aws_elb" "elb-infra-public" {
   connection_draining = false
   security_groups    = [aws_security_group.sg-web-in.id,
                         aws_security_group.sg-all-out.id]
-  subnets            = [aws_subnet.subnet1.id,
-                        aws_subnet.subnet2.id,
-                        aws_subnet.subnet3.id]
-  instances = [aws_instance.tale_infra01.id,
-               aws_instance.tale_infra02.id,
-               aws_instance.tale_infra03.id]
+  subnets            = aws_subnet.subnet_pub[*].id
+  instances = aws_instance.infra[*].id
 
   listener {
       instance_port     = 80
@@ -781,7 +645,7 @@ resource "aws_key_pair" "ssh-key" {
 resource "aws_instance" "tale_bastion" {
   ami = var.rhel7-ami[var.region_name]
   instance_type = "t2.medium"
-  subnet_id = aws_subnet.subnet1.id
+  subnet_id = aws_subnet.subnet_pub.0.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
                             aws_security_group.sg-all-out.id]
   key_name= aws_key_pair.ssh-key.key_name
@@ -799,10 +663,11 @@ resource "aws_instance" "tale_bastion" {
 }
 
 #Masters
-resource "aws_instance" "tale_mast01" {
+resource "aws_instance" "master" {
+  count = 3
   ami = var.rhel7-ami[var.region_name]
   instance_type = var.master-instance-type
-  subnet_id = aws_subnet.subnet_priv1.id
+  subnet_id = aws_subnet.subnet_priv[count.index].id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-master.id,
                             aws_security_group.sg-node.id,
@@ -831,85 +696,7 @@ resource "aws_instance" "tale_mast01" {
   }
 
   tags = {
-        Name = "master01"
-        Clusterid = var.cluster_name
-        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
-        Project = "OCP-CAM"
-  }
-}
-
-resource "aws_instance" "tale_mast02" {
-  ami = var.rhel7-ami[var.region_name]
-  instance_type = var.master-instance-type
-  subnet_id = aws_subnet.subnet_priv2.id
-  vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-                            aws_security_group.sg-master.id,
-                            aws_security_group.sg-node.id,
-                            aws_security_group.sg-all-out.id]
-  key_name= aws_key_pair.ssh-key.key_name
-  user_data = var.user-data-masters 
-
-  root_block_device {
-      volume_size = 60
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdb"
-      volume_size = 80
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdc"
-      volume_size = 80
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdd"
-      volume_size = 80
-      delete_on_termination = true
-  }
-
-  tags = {
-        Name = "master02"
-        Clusterid = var.cluster_name
-        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
-        Project = "OCP-CAM"
-  }
-}
-
-resource "aws_instance" "tale_mast03" {
-  ami = var.rhel7-ami[var.region_name]
-  instance_type = var.master-instance-type
-  subnet_id = aws_subnet.subnet_priv3.id
-  vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-                            aws_security_group.sg-master.id,
-                            aws_security_group.sg-node.id,
-                            aws_security_group.sg-all-out.id]
-  key_name= aws_key_pair.ssh-key.key_name
-  user_data = var.user-data-masters 
-
-  root_block_device {
-      volume_size = 60
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdb"
-      volume_size = 80
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdc"
-      volume_size = 80
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdd"
-      volume_size = 80
-      delete_on_termination = true
-  }
-
-  tags = {
-        Name = "master03"
+        Name = "master.${count.index}"
         Clusterid = var.cluster_name
         "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
@@ -917,10 +704,11 @@ resource "aws_instance" "tale_mast03" {
 }
 
 #Infras
-resource "aws_instance" "tale_infra01" {
+resource "aws_instance" "infra" {
+  count = var.infra_count
   ami = var.rhel7-ami[var.region_name]
   instance_type = var.nodes-instance-type
-  subnet_id = aws_subnet.subnet_priv1.id
+  subnet_id = element(aws_subnet.subnet_priv[*].id,count.index)
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-web-in.id,
                             aws_security_group.sg-node.id,
@@ -944,74 +732,7 @@ resource "aws_instance" "tale_infra01" {
   }
 
   tags = {
-        Name = "infra01"
-        Clusterid = var.cluster_name
-        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
-        Project = "OCP-CAM"
-  }
-}
-
-resource "aws_instance" "tale_infra02" {
-  ami = var.rhel7-ami[var.region_name]
-  instance_type = var.nodes-instance-type
-  subnet_id = aws_subnet.subnet_priv2.id
-  vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-                            aws_security_group.sg-web-in.id,
-                            aws_security_group.sg-node.id,
-                            aws_security_group.sg-all-out.id]
-  key_name= aws_key_pair.ssh-key.key_name
-  user_data = var.user-data-nodes
-
-  root_block_device {
-      volume_size = 30
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdb"
-      volume_size = 80
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdc"
-      volume_size = 80
-      delete_on_termination = true
-  }
-
-  tags = {
-        Name = "infra02"
-        Clusterid = var.cluster_name
-        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
-        Project = "OCP-CAM"
-  }
-}
-resource "aws_instance" "tale_infra03" {
-  ami = var.rhel7-ami[var.region_name]
-  instance_type = var.nodes-instance-type
-  subnet_id = aws_subnet.subnet_priv3.id
-  vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-                            aws_security_group.sg-web-in.id,
-                            aws_security_group.sg-node.id,
-                            aws_security_group.sg-all-out.id]
-  key_name= aws_key_pair.ssh-key.key_name
-  user_data = var.user-data-nodes
-
-  root_block_device {
-      volume_size = 30
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdb"
-      volume_size = 80
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdc"
-      volume_size = 80
-      delete_on_termination = true
-  }
-
-  tags = {
-        Name = "infra03"
+        Name = "infra.${count.index}"
         Clusterid = var.cluster_name
         "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
@@ -1019,10 +740,11 @@ resource "aws_instance" "tale_infra03" {
 }
 
 #Workers
-resource "aws_instance" "tale_worker01" {
+resource "aws_instance" "worker" {
+  count = var.worker_count
   ami = var.rhel7-ami[var.region_name]
   instance_type = var.nodes-instance-type
-  subnet_id = aws_subnet.subnet_priv1.id
+  subnet_id = element(aws_subnet.subnet_priv[*].id,count.index)
   vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
                             aws_security_group.sg-node.id,
                             aws_security_group.sg-all-out.id]
@@ -1045,73 +767,7 @@ resource "aws_instance" "tale_worker01" {
   }
 
   tags = {
-        Name = "worker01"
-        Clusterid = var.cluster_name
-        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
-        Project = "OCP-CAM"
-  }
-}
-
-resource "aws_instance" "tale_worker02" {
-  ami = var.rhel7-ami[var.region_name]
-  instance_type = var.nodes-instance-type
-  subnet_id = aws_subnet.subnet_priv2.id
-  vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-                            aws_security_group.sg-node.id,
-                            aws_security_group.sg-all-out.id]
-  key_name= aws_key_pair.ssh-key.key_name
-  user_data = var.user-data-nodes
-
-  root_block_device {
-      volume_size = 30
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdb"
-      volume_size = 80
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdc"
-      volume_size = 80
-      delete_on_termination = true
-  }
-
-  tags = {
-        Name = "worker02"
-        Clusterid = var.cluster_name
-        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
-        Project = "OCP-CAM"
-  }
-}
-
-resource "aws_instance" "tale_worker03" {
-  ami = var.rhel7-ami[var.region_name]
-  instance_type = var.nodes-instance-type
-  subnet_id = aws_subnet.subnet_priv3.id
-  vpc_security_group_ids = [aws_security_group.sg-ssh-in-local.id,
-                            aws_security_group.sg-node.id,
-                            aws_security_group.sg-all-out.id]
-  key_name= aws_key_pair.ssh-key.key_name
-  user_data = var.user-data-nodes
-
-  root_block_device {
-      volume_size = 30
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdb"
-      volume_size = 80
-      delete_on_termination = true
-  }
-  ebs_block_device {
-      device_name = "/dev/xvdc"
-      volume_size = 80
-      delete_on_termination = true
-  }
-
-  tags = {
-        Name = "worker03"
+        Name = "worker.${count.index}"
         Clusterid = var.cluster_name
         "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
@@ -1343,77 +999,29 @@ output "bastion_dns_name" {
   value = aws_route53_record.bastion.fqdn
   description = "DNS name for bastion host"
 }
-output "master01_ip" {
-  value = aws_instance.tale_mast01.private_ip
-  description = "The private IP address of master01"
+output "masters_ip" {
+  value = aws_instance.master[*].private_ip
+  description = "The private IP address of the master nodes"
 }
-output "master01_name" {
-  value = aws_instance.tale_mast01.private_dns
-  description = "The private FQDN of master01"
+output "masters_name" {
+  value = aws_instance.master[*].private_dns
+  description = "The private FQDN of the master nodes"
 }
-output "master02_ip" {
-  value = aws_instance.tale_mast02.private_ip
-  description = "The private IP address of master02"
+output "infras_ip" {
+  value = aws_instance.infra[*].private_ip
+  description = "The private IP address of the infra nodes"
 }
-output "master02_name" {
-  value = aws_instance.tale_mast02.private_dns
-  description = "The private FQDN of master02"
+output "infras_name" {
+  value = aws_instance.infra[*].private_dns
+  description = "The private FQDN of the infra nodes"
 }
-output "master03_ip" {
-  value = aws_instance.tale_mast03.private_ip
-  description = "The private IP address of master03"
+output "workers_ip" {
+  value = aws_instance.worker[*].private_ip
+  description = "The private IP address of the wokers nodes"
 }
-output "master03_name" {
-  value = aws_instance.tale_mast03.private_dns
-  description = "The private FQDN of master03"
-}
-output "infra01_ip" {
-  value = aws_instance.tale_infra01.private_ip
-  description = "The private IP address of infra01"
-}
-output "infra01_name" {
-  value = aws_instance.tale_infra01.private_dns
-  description = "The private FQDN of infra01"
-}
-output "infra02_ip" {
-  value = aws_instance.tale_infra02.private_ip
-  description = "The private IP address of infra02"
-}
-output "infra02_name" {
-  value = aws_instance.tale_infra02.private_dns
-  description = "The private FQDN of infra02"
-}
-output "infra03_ip" {
-  value = aws_instance.tale_infra03.private_ip
-  description = "The private IP address of infra03"
-}
-output "infra03_name" {
-  value = aws_instance.tale_infra03.private_dns
-  description = "The private FQDN of infra03"
-}
-output "worker01_ip" {
-  value = aws_instance.tale_worker01.private_ip
-  description = "The private IP address of woker01"
-}
-output "worker01_name" {
-  value = aws_instance.tale_worker01.private_dns
-  description = "The private FQDN of woker01"
-}
-output "worker02_ip" {
-  value = aws_instance.tale_worker02.private_ip
-  description = "The private IP address of woker02"
-}
-output "worker02_name" {
-  value = aws_instance.tale_worker02.private_dns
-  description = "The private FQDN of woker02"
-}
-output "worker03_ip" {
-  value = aws_instance.tale_worker03.private_ip
-  description = "The private IP address of woker03"
-}
-output "worker03_name" {
-  value = aws_instance.tale_worker03.private_dns
-  description = "The private FQDN of woker03"
+output "workers_name" {
+  value = aws_instance.worker[*].private_dns
+  description = "The private FQDN of the woker nodes"
 }
 output "master_public_lb" {
   value = aws_route53_record.master-ext.fqdn
