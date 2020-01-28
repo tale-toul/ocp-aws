@@ -20,7 +20,7 @@ variable "region_name" {
 }
 
 variable "cluster_name" {
-  description = "Cluser name, used for prefixing some component names like the DNS domain"
+  description = "Cluster name, used to define Clusterid tag and as part of other component names"
   type = string
   default = "ocp"
 }

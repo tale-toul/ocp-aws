@@ -46,7 +46,7 @@
 
 ### Introduction
 
-This project is meant to help you deploy an OpenSift 3.11 cluster in AWS in the most automated way possible.  
+The objective of this project is to simplify the deployment of an OpenShift 3.11 cluster on AWS and make it as automated and repeatable as possible, to accomplish this terraform is used to deploy the insfrastructure part, ansible is used to prepare the hosts and deploy the cluster.
 
 The architecture is based on the following documentation by Red Hat:
 
@@ -66,6 +66,8 @@ The deployment consists of 3 main phases:
 ### Terraform
 
 The Terraform directory contains the neccessary files to create the infrastructure required to install an OCP 3.11 cluster in AWS.
+
+The terraform manifest is designed to be run against a region with 3 availability zones, it will not work on regions with only 2 availability zones.
 
 One provider is defined (https://www.terraform.io/docs/configuration/providers.html) to create the resources in AWS.  A credentials file containing the access key ID and the access key secret is created with the following format:
 
