@@ -1,7 +1,7 @@
-## Openshift 3.11 installation on AWS
+# Openshift 3.11 installation on AWS
 
-### Table of contents
-[Reference documentation](#reference-documentation)
+## Table of contents
+* [Introduction](#introduction)
 
 * [Terraform](#terraform)
 
@@ -44,7 +44,7 @@
 * [Cluster decommissioning instructions](#cluster-decommissioning-instructions)
 
 
-### Introduction
+## Introduction
 
 The objective of this project is to simplify the deployment of an OpenShift 3.11 cluster on AWS and make it as automated and repeatable as possible, to accomplish this terraform is used to deploy the insfrastructure part, ansible is used to prepare the hosts and deploy the cluster.
 
@@ -63,7 +63,7 @@ The deployment consists of 3 main phases:
  * Cluster deployment.- Using the standar installation playbooks for OCP 3.11 the cluster is deployed.
 
 
-### Terraform
+## Terraform
 
 The Terraform directory contains the neccessary files to create the infrastructure required to install an OCP 3.11 cluster in AWS.
 
@@ -97,7 +97,7 @@ In addition to the tag Clusterid, the EC2 instances also require the following t
 "kubernetes.io/cluster/${var.cluster_name}" = "owned"
 ```
 
-#### Variables
+### Variables
 
 Variables are defined at the beginning of the file to simplify the rest of the configuration, it is enough to modify its values to change the configuration of the infrastructure deployed by terraform:
 
@@ -129,9 +129,18 @@ Variables are defined at the beginning of the file to simplify the rest of the c
 
 * **user-data-nodes**.- User data for worker and infra nodes instances, contains cloud config directives to setup disks and partitions.
 
-#### VPC
+### VPC
 
-A single VPC is created where all resources will be placed, it has DNS support enable for the EC2 instances created inside, distributed by the DHCP server, and those instances will get a generated DNS name within the domain eu-west-1.compute.internal
+A single VPC is created where all resources will be placed, it has DNS support enable for the EC2 instances created inside, distributed by the DHCP server, in most regions the domain used by the internal DNS server will be <region_name>.compute.internal, but for the region **us-east-1** it will be ec2.internal, the difference is due to the particular way this regions is treated in AWS.  The use of the domains is such that the internal DNS names coincide with the names obtained inside the hosts with the command `hostname -f`.  To apply this particular case to the terraform configuration a conditional is used, the variable domain_name will receive the value ec2.internal only when region_name is equal to "us-east-1":
+
+```
+ resource "aws_vpc_dhcp_options" "vpc-options" {
+  domain_name = var.region_name == "us-east-1" ? "ec2.internal" : "${var.region_name}.compute.internal" 
+  ...
+ }
+```
+
+domain_name = var.region_name == "us-east-1" ? "ec2.internal" : "${var.region_name}.compute.internal"
 
 Six subnets are created to leverage the High Availavility provided by the Availability Zones in the region, 3 public subnets and 3 private ones.
 
@@ -139,9 +148,9 @@ An internet gateway is created to provide access to and from the Internet.  For 
 
 3 NAT gateways are created and placed, one on each of the public subnets, they are used to provide access to the Inernet to the EC2 instances in the private subnets, this way those EC2 instances will be able to access the ouside world for example to download images, but the outside world will not be able to access the EC2 instances.  An Elastic IP is created and assigned to each one of the NAT gateways.  For the EC2 instances in the private networks to be able to use the NAT gateways, 3 route tables are created with a default route pointing to one of the NAT gateways, then an association is made between one private subnet and the corresponding route table; in the end there will be a route table associated to each private subnet pointing to one of the NAT gateways.
 
-#### EC2 instances
+### EC2 instances
 
-A total of 10 EC2 instances are created.  Masters and workers have 4 vCPUs and 16GB of RAM, bastion host has 2 vCPUS and 4GB of RAM:
+A total of 10 EC2 instances are created.  By default master and worker and bastion hosts have 4 vCPUs and 16GB of RAM:
 
 * 1 bastion host deployed in one of the public subnets
 
@@ -179,7 +188,7 @@ The EC2 VMs created in the private networks need access to the Internet to donwl
 
 One Internet Gateway is created in the VPC to provide access from and to the Internet for the resources created in the public subnets. For this access to be enable, a single route table is created and associated to every public subnet.
 
-#### Security Groups
+### Security Groups
 
 The EC2 instances need the right security group assigned depending on the particular role of the instace.
 
@@ -235,7 +244,7 @@ The other options to define the source that can use the ingress rule are:
     }
 ```
 
-#### Elastic Load Balancers
+### Elastic Load Balancers
 
 [Terraform documentations](https://www.terraform.io/docs/providers/aws/r/lb.html)
 
@@ -249,9 +258,9 @@ Three load balancers are created:
 
 The load balancers are of type **aws_elb**.- This _classic_ load balancer allows the use of security groups, does not need an x509 certificate to terminate the SSL/TLS connections; allows the definition of a TCP port to listen to and to forward the requests to the EC2 instances downstream.  The subnets where the load balancer will be placed, listening for requests is also defined, along the instances that will receive the requests. Cross zone load balanzing will be enable because the VMs being access are in differente availability zones. The load balancer will be internal or not depending on who will be using it.  Finally a health check against the EC2 instances is defined to verify if they can accept requests.
 
-#### DNS Route 53
+### DNS Route 53
 
-Two DNS zones are created to resolve the names of components in the cluster: one external to be accessible from the Internet, and one internal to be only accessible from inside the cluster.  Both zones are created under **rhce.support** by default, but another domain can be selecte assigning a value to the variable **dns_domain_ID**, this variable expects a zone ID not a name.
+Two DNS zones are created to resolve the names of components in the cluster: one external to be accessible from the Internet, and one internal to be only accessible from inside the cluster.  Both zones are created under **rhce.support** by default, but another domain can be selected assigning a value to the variable **dns_domain_ID**, this variable expects a zone ID.
 
 A few records have been created so far.
 
@@ -266,17 +275,17 @@ A few records have been created so far.
   * master.- for the internal load balancer
   * *.apps.- for the applications domain
   
-#### S3 bucket
+### S3 bucket
 
 An S3 bucket is created to be used as backend storage for the internal OpenShift image registry.  It is created in the same region as the rest of the resources, this is controlled through the variable **region_name**.  
 
-The name of the bucket must be unique across the whole AWS infrastructure, so a **random_string** resource is defined to generate names of lengh 20 character, the characters will be only lowercase letters, numbers and hiphens (-):
+The name of the bucket must be unique across the whole AWS infrastructure, so a **random_string** resource is defined to generate names of lengh 20 character, the characters will be only lowercase letters and numbers:
 
 ```
 resource "random_string" "bucket_name" {
   length = 20
   upper = false
-  override_special = "-"
+  special = false
 }
 ```
 Later during the bucket definition the random name is generated `bucket = random_string.bucket_name.result`.  In other parts of the terraform manifest the same name is referenced with `${aws_s3_bucket.registry-bucket.id}`
@@ -285,9 +294,25 @@ Terraform will not generate a new random string if we run the **terraform apply*
 
 By default the non empty S3 buckets are not deleted by the command **terraform destroy**, this behaviour has been changed with the use of the argument **force_destroy = true** which forces terraform to destroy the S3 bucket even if this is not empty.
 
-#### IAM users
+### IAM users
 
-Two IAM users are created to be used by the installation playbooks, and later by the cluster itself.  The policy definitions are created as "here" documents, it is **important** that the opening and closing curly brackets are placed on column 1 of the document, otherwise a malformed JSON error happens when running "terraform apply" command:
+Two IAM users are created to be used by the installation playbooks, and later by the cluster itself.  The policy definitions assigned to them are created as "here" documents, it is **important** that the opening and closing curly brackets are placed on column 1 of the document, otherwise a malformed JSON error happens when running "terraform apply" command.  The name of the users must be unique in the organization, so a random 5 character suffix is added by a random string provider:
+
+```
+resource "random_string" "sufix_name" {
+  length = 5
+  upper = false
+  special = false
+}
+
+ resource "aws_iam_user" "iam-admin" {
+  name = "iam-admin-${random_string.sufix_name.result}"
+  ...
+ 
+ resource "aws_iam_user" "iam-registry" {
+  name = "iam-registry-${random_string.sufix_name.result}"
+  ...
+```
 
 * The first one (iam-admin) is to be associated with the EC2 instances and has a policy that allows it to operate on the EC2 instances and load balancers. The id and key of this user is assigned to the following variables in the inventory file used to deploy the cluster: **openshift_cloudprovider_aws_access_key**; **openshift_cloudprovider_aws_secret_key**
 
@@ -295,7 +320,7 @@ Two IAM users are created to be used by the installation playbooks, and later by
 
 In the output section there are entries to print the access key ID and access key secret of these two IAM users, this information should be considered restricted.
 
-#### Component creation with loops
+### Component creation with loops
 
 Many of the components in the infrastructure are instantiated more than once to add high availability and possibly load balancing to the cluster, this is the case of the availability zones, subnets, nat gateways, master infra and worker instances, etc.  In all cases the instances of these components are similar so it is possible to use a loop to create them instead of using a definition block for each one; with the use of loops the terraform manifest is more compact an aesier to maintain.  In the case of the infra and worker instances the number is controlled by variables (**infra_count**, **worker_count**) with a default value of 3, but they can be modified by the user to create the desired amount of infra and worker nodes.
 
@@ -346,7 +371,7 @@ output "infras_ip" {
 This requires a special approach in the proccessing of the output when used by the [create_inventario.sh](#inventory-files) script
 
 
-##### Placing infras and workers
+#### Placing infras and workers
 
 When there is not a 1 to 1 match between the number of instances to be assigned to another resource, for example the number of nodes is different from the number of subnets to place them in, the **element** function can be used; this function accepts a list and a number, and extracts from the list the element in the index position referenced by the number, if the number is greater than the maximum index position it is wrapped around and starts at the beggining of the list, for example if the number is 4 in a 3 element list, the returnded element by the function will be the one at position 2, consider that indexes start counting at 0.
 ```
@@ -359,11 +384,11 @@ resource "aws_instance" "infra" {
 
 With the use of the element function the instances will be evenly spread across the subnets in the region.
 
-### Ansible
+## Ansible
 
 An ansible playbook is used to prepare the hosts before actually running the official cluster deployment playbooks.
 
-#### SSH connection through the bastion host
+### SSH connection through the bastion host
 
 Before running any ansible playbooks against the nodes in the cluster, first ssh must be configured so that a connection to the hosts in the private subnetworks can be stablished. A configuration file **ssh.cfg** is created from a jinja2 template (ssh.cfg.j2), containing a block with the connection parameters for the bastion host, and a block for the connection to the rest of the hosts in the VPC.  The template is rendered in the prereqs-ocp.yml ansible playbook, using variables from the terraform output variables.
 
@@ -415,7 +440,7 @@ When ansible is run for the first time after the hosts have been created, the re
 
 To avoid this problem we have to make sure that a connection to the bastion host is stablished before going to any other host in the private subnets, for that reason we have to make sure that we run a play against the bastion host before running any other plays against the hosts in the private networks.
 
-#### Ansible configuration file
+### Ansible configuration file
 
 An **ansible.cfg** configuration file is created with the following contents:
 
@@ -456,13 +481,13 @@ In the **ssh_connection** section:
 The ssh connections will use a specific configuration file, plus additional options that are usually included as default configuration in ansible.
 pipelining=True.- SSH connections will be reused by subsequent tasks.
 
-#### Inventory files
+### Inventory files
 
 Two different inventory files are used during the cluster deployment:
 
 * A simple inventory file that is used by the **prereqs-ocp.yml**, basically containing the list of all hosts in the cluster, including the bastion host, grouped by the sections that will be used later in the deploy cluster inventory file. This inventory file is generated by the script **Ansible/create_inventario.sh** which gathers the data from the terraform output.  This inventory file must be recreated every time a new infrastructure is created with terraform.  
 
-When using [loops](#component-creation-with-loops) in terraform to create the instances, the list of hostnames is saved in an array ignoring lines with square brackets and removing quotes and commas, later the contentes of the array are printed. 
+When using [loops](#component-creation-with-loops) in terraform to create the instances, the list of hostnames is saved in an array ignoring lines with square brackets and removing quotes and commas, later the contents of the array are printed. 
 
 ```
 for host in $(terraform output -state=$TERRAFORM_STATE masters_name|egrep -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'); do
@@ -475,13 +500,28 @@ done
 ```
 * A complete inventory file used by the deploy_cluster.yml playbook.  This inventory file is created by the **prereqs-ocp.yml** playbook from two different sources: 
 
-  * A jinja2 template containing the sections **[OSEv3:children]** and **[OSEv3:vars]**, that is rendered in the **prereqs-ocp.yml** playbook. The variables used in the templated are populated from the data generated by the `terraform output` command, and are updated every time new infrastructure is generate by terraform. 
+  * A jinja2 template containing the sections **[OSEv3:children]** and **[OSEv3:vars]**.  The variables used in the templated are populated from the data generated by the `terraform output` command, and are updated every time new infrastructure is generate by terraform. 
 
   * The host groups section that is created and added at the end of the first inventory part, also in the **prereqs-ocp.yml** playbook.
 
   The resulting inventory file should be reviewed and possibly modified before running the cluster deployment playbooks.
 
-#### Prerequisites
+#### Router and Registry configuration
+
+By default the deploy playbook will not verify that the applications router and internal image registry in the default project have started successfully, this may lead to an apparently successful cluster deployment with a malfunctioning router and image registry, which in turn makes the whole cluster useless.  To avoid this situation the following variables are used in the inventory file: openshift_hosted_router_wait; openshift_hosted_registry_wait.  These variables make the playbook stop and wait for complete deployment of the router and registry, if the deployment is successful the playbook will continue with the following tasks, otherwise it will fail and stop.
+
+OCP v3.11 uses an older version of the AWS SDK, which means that it is not aware of newer AWS regions like eu-north-1, so if the cluster is deployed in this region the image registry will fail when the pod starts and tries to connect to the S3 bucket, with the error messsage "panic: Invalid region provided: eu-north-1".  The workaround for new regions is to provide the s3 endpoint directly in the ansible inventory via the [`openshift_hosted_registry_storage_s3_regionendpoint` parameter](https://docs.openshift.com/container-platform/3.11/install/configuring_inventory_file.html#advanced-install-registry-storage). For eu-north-1 this would be https://s3.eu-north-1.amazonaws.com, see the list [here](https://docs.aws.amazon.com/general/latest/gr/rande.html)
+
+The inventory template uses an _if_ block to determine if the special endpoint must be used or not:
+
+```
+{% if region_name == "eu-north-1" %}
+openshift_hosted_registry_storage_s3_regionendpoint=https://s3.eu-north-1.amazonaws.com
+
+{% endif %}
+```
+
+### Prerequisites
 
 A playbook is created to set up the hosts in the cluster before running the actual deployment playbook.  The playbook is called **prereqs-ocp.yml**.
 
@@ -503,7 +543,7 @@ The next play **Prerequisites for OCP cluster members** contains several tasks:
  
 * Register nodes with Red Hat
 
-* Enable the repositories needed to install Openshift.
+* Enable the repositories needed to install Openshift.  It has been updated to use the now supported ansible verion 2.8 which dramatically reduces the time required to complete the playbooks, and the fast-datapath has been removed since it is not required anymore.
 
 * Update operating system packages, only when the **update_packages** variable has been defined as true, the default value is false.
 
@@ -517,7 +557,7 @@ The next two plays: **Check and set for additional storage for all nodes** and *
 
 The next play **Set up bastion host** prepares the bastion host to run the official OpenShift deployment playbooks, by installing some packages and copying some required files. 
 
-#### Tests
+### Tests
 
 A directory called _tests_ inside the Ansible directory is created to hold test playbooks to verify that the infrastructure works as expected:
 
@@ -531,7 +571,7 @@ $ while true; do curl -k https://elb-master-public-697013167.eu-west-1.elb.amazo
 
 * **docker-test.yaml**.- This playbook is run against all nodes, including the bastion, install docker packages, starts the docker service, and runs a container.  
 
-#### Storage management 
+### Storage management 
 
 The [OpenShift documentation](https://docs.openshift.com/container-platform/3.11/install/prerequisites.html#prerequisites-storage-management) recommends minimums for available storage in some partitions in the cluster host members.  To fulfill these recommendations a two step process is followed:
 
@@ -554,7 +594,7 @@ The [OpenShift documentation](https://docs.openshift.com/container-platform/3.11
 
   Next the disk device used as backend storage for docker is updated in the **/etc/sysconfig/docker-storage-setup** by looking for the right device name and assigning it to a variable, then updating the line starting with **DEVS=** in the configuration filei. These tasks are always run, without previously verifying if the configuration is already correct, but ansible will actually not change the configuration file if this is already correct.  
 
-### Cluster deployment instructions
+## Cluster deployment instructions
 
 [Terraform](https://www.terraform.io/) and [Ansible](https://www.ansible.com/) must be installed in the host where the installation will be run from; an [AWS](https://aws.amazon.com/) account is needed to create the infrastructure elements; A [Red Hat](https://access.redhat.com) user account with entitlements for installing OpenShift is required. 
 
@@ -614,6 +654,12 @@ Place the resulting encrypted file in the directory Ansible/group_vars/all
 $ terraform apply -var="cluster_name=athena" -var="region_name=eu-west-3" -var="nodes-instance-type=t2.xlarge" -var="ssh-keyfile=test-ssh.pub" -var="ssh-keyname=test-ssh"
 ```
 
+* Save the value of the variables used in this step becasuse the same values will be required in case of destroying the infrastructure with **terrafor destroy** command.  In the example the use of !! assumes that no other command has been executed after _terraform apply_:
+
+```
+echo "!!" > terrafor_apply.txt
+```
+
 * Create an inventory file to run the prereqs-ocp.yml playbook.  This inventory file is not the one used to deploy the OCP cluster, that one will be created during the prereqs-ocp.yml playbook execution:
 
 ```
@@ -647,13 +693,13 @@ $ ansible-playbook  -i inventory-prereq --vault-id vault_id prereqs-ocp.yml
 * ssh to the bastion host and run the prerequisites and deploy cluster openshift playbook:
 
 ```
-$ ssh -F ssh.cfg bastion.ocpext.rhcee.support
+$ ssh -F ssh.cfg bastion.ocpext.example.com
 bastion$ cd OCP311
 bastion$ ansible-playbook -vvv /usr/share/ansible/openshift-ansible/playbooks/prerequisites.yml
 bastion$ ansible-playbook -vvv /usr/share/ansible/openshift-ansible/playbooks/deploy_cluster.yml
 ```
 
-#### Accessing the cluster
+### Accessing the cluster
 
 The hostname that must be used to access the cluster is the one assigned to the public load balancer in front of the masters, this name can be obtained from the variable **openshift_master_cluster_public_hostname** in the inventory file, or the output variable **master_public_lb** in terraform:
 
@@ -673,9 +719,9 @@ To login to the cluster with the **oc** command use `oc login -u <user> https://
 $ oc login -u user1 https://master.ocpext.rhcee.support
 ```
 
-### Cluster decommissioning instructions
+## Cluster decommissioning instructions
 
-To delete the cluster and **all** its components, including the data stored in the S3 and ELB disks, use the `terraform destroy' command.  This command should include the same variable definitions that were used during cluster creation, not all variables are strictly requiered though:
+To delete the cluster and **all** its components, including the data stored in the S3 and ELB disks, use the `terraform destroy` command.  This command should include the same variable definitions that were used during cluster creation, not all variables are strictly requiered though:
 
 ```
 $ cd Terraform

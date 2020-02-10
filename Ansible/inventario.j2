@@ -26,8 +26,11 @@ openshift_master_htpasswd_file=/tmp/files/htpasswd.openshift
 
 #These selectors are the default values anyway
 openshift_router_selector='node-role.kubernetes.io/infra=true'
+#Check for a correct applications router deployment
+openshift_hosted_router_wait=True
 
-# OpenShift Registries Locations
+
+# OpenShift Registry vars
 oreg_url=registry.redhat.io/openshift3/ose-${component}:${version}
 oreg_auth_user= {{ oreg_auth_user }}
 oreg_auth_password= {{ oreg_auth_password }}
@@ -53,6 +56,13 @@ openshift_hosted_registry_acceptschema2=true
 openshift_hosted_registry_enforcequota=true
 openshift_hosted_registry_replicas=3
 openshift_registry_selector='node-role.kubernetes.io/infra=true'
+{% if region_name == "eu-north-1" %}
+openshift_hosted_registry_storage_s3_regionendpoint=https://s3.eu-north-1.amazonaws.com
+
+{% endif %}
+
+#Check for a correct internal registry deployment
+openshift_hosted_registry_wait=True
 
 #Service Catalog and broker
 openshift_enable_service_catalog=true

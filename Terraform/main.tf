@@ -48,7 +48,7 @@ variable "master-instance-type" {
 variable "nodes-instance-type" {
   description = "Type of instance used for infra and worker nodes, define the hardware characteristics like memory, cpu, network capabilities"
   type = string
-  default = "m4.xlarge"
+  default = "t3.xlarge"
 }
 
 variable "rhel7-ami" {
@@ -189,7 +189,7 @@ resource "aws_vpc" "vpc" {
 }
 
 resource "aws_vpc_dhcp_options" "vpc-options" {
-  domain_name          = "${var.region_name}.compute.internal"
+  domain_name = var.region_name == "us-east-1" ? "ec2.internal" : "${var.region_name}.compute.internal" 
   domain_name_servers  = ["AmazonProvidedDNS"] 
 }
 
@@ -650,7 +650,7 @@ resource "aws_key_pair" "ssh-key" {
 #Bastion host
 resource "aws_instance" "tale_bastion" {
   ami = var.rhel7-ami[var.region_name]
-  instance_type = "t2.medium"
+  instance_type = var.nodes-instance-type
   subnet_id = aws_subnet.subnet_pub.0.id
   vpc_security_group_ids = [aws_security_group.sg-ssh-in.id,
                             aws_security_group.sg-all-out.id]
@@ -871,7 +871,7 @@ resource "aws_route53_record" "master-int" {
 resource "random_string" "bucket_name" {
   length = 20
   upper = false
-  override_special = "-"
+  special = false
 }
 
 #Registry Bucket
@@ -890,9 +890,17 @@ resource "aws_s3_bucket" "registry-bucket" {
 }
 
 #IAM users
+
+#Provides a source to create a random sufix string for the IAM user names 
+resource "random_string" "sufix_name" {
+  length = 5
+  upper = false
+  special = false
+}
+
 #Admin user for aws OpenShift plugin
 resource "aws_iam_user" "iam-admin" {
-  name = "iam-admin"
+  name = "iam-admin-${random_string.sufix_name.result}"
 
    tags = {
     Name = "iam-admin"
@@ -950,7 +958,7 @@ resource "aws_iam_user_policy" "policy-admin" {
 
 #Registry user for S3 bucket access
 resource "aws_iam_user" "iam-registry" {
-  name = "iam-registry"
+  name = "iam-registry-${random_string.sufix_name.result}"
 
    tags = {
     Name = "iam-registry"
