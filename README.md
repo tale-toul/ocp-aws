@@ -79,7 +79,7 @@ aws_secret_access_key=xxxx
 and the provider definition contains the following directive referencing the credentials file:
 
 ```
-  shared_credentials_file = "redhat-credentials.ini"
+  shared_credentials_file = "aws-credentials.ini"
 ```
 
 When using credentials files it is important to make sure that the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** are not defined in the session, otherwise extraneus errors will appear when running terraform.
@@ -131,7 +131,9 @@ Variables are defined at the beginning of the file to simplify the rest of the c
 
 ### VPC
 
-A single VPC is created where all resources will be placed, it has DNS support enable for the EC2 instances created inside, distributed by the DHCP server, in most regions the domain used by the internal DNS server will be <region_name>.compute.internal, but for the region **us-east-1** it will be ec2.internal, the difference is due to the particular way this regions is treated in AWS.  The use of the domains is such that the internal DNS names coincide with the names obtained inside the hosts with the command `hostname -f`.  To apply this particular case to the terraform configuration a conditional is used, the variable domain_name will receive the value ec2.internal only when region_name is equal to "us-east-1":
+A single VPC is created where all resources will be placed, it has DNS support enable for EC2 instances inside, distributed by the DHCP server.  
+
+In most regions the domain used by the internal DNS server will be `<region_name>.compute.internal`, but for the region **us-east-1** it will be `ec2.internal`, the difference is due to the particular way the  **us-east-1** regions is treated in AWS.  The domain name assigned to the instances by DHCP is such that the internal DNS names match the names obtained inside the hosts with the command `hostname -f`.  To apply this particular case to the terraform configuration a conditional is used, the variable domain_name will receive the value ec2.internal only when region_name is equal to "us-east-1":
 
 ```
  resource "aws_vpc_dhcp_options" "vpc-options" {
@@ -140,13 +142,13 @@ A single VPC is created where all resources will be placed, it has DNS support e
  }
 ```
 
-domain_name = var.region_name == "us-east-1" ? "ec2.internal" : "${var.region_name}.compute.internal"
+Six subnets are created to leverage the High Availavility provided by the Availability Zones, 3 public and 3 private subnets.
 
-Six subnets are created to leverage the High Availavility provided by the Availability Zones in the region, 3 public subnets and 3 private ones.
-
-An internet gateway is created to provide access to and from the Internet.  For the EC2 instances in the public subnets to be able to use it, a route table is created with a default route pointing to the internet gateway, then an association is made between each public subnet and the route table.
+An internet gateway is created and assigned to the VPC to provide access to and from the Internet.  For the EC2 instances in the public subnets to be able to use it, a route table is created with a default route pointing to the internet gateway, then an association is made between each public subnet and the route table.
 
 3 NAT gateways are created and placed, one on each of the public subnets, they are used to provide access to the Inernet to the EC2 instances in the private subnets, this way those EC2 instances will be able to access the ouside world for example to download images, but the outside world will not be able to access the EC2 instances.  An Elastic IP is created and assigned to each one of the NAT gateways.  For the EC2 instances in the private networks to be able to use the NAT gateways, 3 route tables are created with a default route pointing to one of the NAT gateways, then an association is made between one private subnet and the corresponding route table; in the end there will be a route table associated to each private subnet pointing to one of the NAT gateways.
+
+An endpoint to access the S3 API is created, this will increase security and performance since the S3 related traffic will not leave the AWS network
 
 ### EC2 instances
 
@@ -250,11 +252,11 @@ The other options to define the source that can use the ingress rule are:
 
 Three load balancers are created: 
 
-* An ELB in front of the masters accepting requests from the Internet.  This load balancer will accept requests on ports 443 and 8444.
+* An ELB in front of the masters accepting requests from the Internet, providing access to the API.  This load balancer will accept requests on ports 443 and 8444.
 
-* An ELB in front of the masters, internal, not accessible from the Internet, accepting requests from other components of the cluser.  This load balancer accepts requests on port 443.
+* An ELB in front of the masters, internal, not accessible from the Internet, accepting requests from other components of the cluser and providing access to the API.  This load balancer accepts requests on port 443.
 
-* An ELB in front of the infra nodes that contain the router pods (HAProxy), accepting requests from the Internet.  This load balancer accepts requests on ports 80 and 443.
+* An ELB in front of the infra nodes that contain the router pods (HAProxy), accepting requests from the Internet, providing access to the application router.  This load balancer accepts requests on ports 80 and 443.
 
 The load balancers are of type **aws_elb**.- This _classic_ load balancer allows the use of security groups, does not need an x509 certificate to terminate the SSL/TLS connections; allows the definition of a TCP port to listen to and to forward the requests to the EC2 instances downstream.  The subnets where the load balancer will be placed, listening for requests is also defined, along the instances that will receive the requests. Cross zone load balanzing will be enable because the VMs being access are in differente availability zones. The load balancer will be internal or not depending on who will be using it.  Finally a health check against the EC2 instances is defined to verify if they can accept requests.
 
@@ -598,9 +600,9 @@ The [OpenShift documentation](https://docs.openshift.com/container-platform/3.11
 
 [Terraform](https://www.terraform.io/) and [Ansible](https://www.ansible.com/) must be installed in the host where the installation will be run from; an [AWS](https://aws.amazon.com/) account is needed to create the infrastructure elements; A [Red Hat](https://access.redhat.com) user account with entitlements for installing OpenShift is required. 
 
-* Create a credentials file for the Terraform provider in the Terraform direcotry, as defined in the main.tf file, see the [Terraform section](#terraform) of this document.
+* Create a credentials file for the Terraform provider in the Terraform directory, as defined in the main.tf file, see the [Terraform section](#terraform) of this document.
 
-* Create an SSH key pair with the following command and copy it to the terraform directory, the terraform configuration expects the output files to be called ocp-ssh and ocp-ssh.pub by default, but the name can be changed via the terraform variable ssh-keyfile:
+* Create an SSH key pair with the following command and copy it to the terraform directory, the terraform configuration expects the output files to be called ocp-ssh and ocp-ssh.pub by default, but the name can be changed via the terraform variable *ssh-keyfile*:
 
 ```
 $ ssh-keygen -o -t rsa -f ocp-ssh -N ""
@@ -613,7 +615,7 @@ $ htpasswd -cb htpasswd.openshift user1 user1_password
 $ for x in {1..5}; do htpasswd -b htpasswd.openshift user${x} user${x}_password; done
 ```
 
-* Create an ansible vault file with the following secret variables: 
+* Create an ansible vault file with the following secret variables, and place it in the directory *Ansible/group_vars/all*.  The name of the file does not matter:
 
   * **subscription_username**; **subscription_password**.- Username and password of the Red Hat user with the entitlements to subscribe nodes with Red Hat
   * **oreg_auth_user**; **oreg_auth_password**.- Username and password of the user with access to the Red Hat container registry. Go [here](https://access.redhat.com/terms-based-registry/) to get or create a user account.
@@ -634,7 +636,6 @@ oreg_auth_password: eyJhbGciOiJSUzUxMiJ9.eyJzdWIiOiJlZmQyZDY....UE7x9h7-ZJjj3zn5
 $ ansible-vault encrypt linux_vars.txt
 ```
 
-Place the resulting encrypted file in the directory Ansible/group_vars/all
 
 * Many terraform variables are defined and can be used to modify several aspects of the infraestructure deployment, some of these variables need to be modified to avoid collitions with other cluster previously deployed using this same terraform file. Review these variables and assing values where needed, in particular:
 
@@ -647,6 +648,12 @@ Place the resulting encrypted file in the directory Ansible/group_vars/all
   * **ssh-keyfile**; **ssh-keyname**.- The name of the file containing the ssh key, created with the ssh-keygen command; and the name of the ssh key that will be used to reference it in AWS.
 
   * **master_count**; **infra_count**; **worker_count**.- Number of master (1 or 3), infra and worker nodes.
+
+* Terrafor needs to be initialize, only the first time it is used, for that use the following command in the terraform directory:
+
+```
+$ terraform init
+```
 
 * Deploy the infrastructure by running a **terraform apply** command in the Terraform directory.  In the following example the cluster name, region, AMI, node instance type, ssh key file name and ssh key name  are selected:
 
@@ -721,7 +728,7 @@ $ oc login -u user1 https://master.ocpext.rhcee.support
 
 ## Cluster decommissioning instructions
 
-To delete the cluster and **all** its components, including the data stored in the S3 and ELB disks, use the `terraform destroy` command.  This command should include the same variable definitions that were used during cluster creation, not all variables are strictly requiered though:
+To delete the cluster and **all** its components, including the data stored in the S3 and ELB disks, use the `terraform destroy` command.  This command should include the same variable definitions used during cluster creation, not all variables are strictly requiered though:
 
 ```
 $ cd Terraform

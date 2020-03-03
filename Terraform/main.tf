@@ -3,7 +3,7 @@
 #https://www.terraform.io/docs/providers/aws/index.html
 provider "aws" {
   region = var.region_name
-  version = "~> 2.39"
+#  version = "~> 2.39"
   shared_credentials_file = "redhat-credentials.ini"
 }
 
@@ -184,6 +184,7 @@ resource "aws_vpc" "vpc" {
     tags = {
         Name = var.vpc_name
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -191,6 +192,10 @@ resource "aws_vpc" "vpc" {
 resource "aws_vpc_dhcp_options" "vpc-options" {
   domain_name = var.region_name == "us-east-1" ? "ec2.internal" : "${var.region_name}.compute.internal" 
   domain_name_servers  = ["AmazonProvidedDNS"] 
+
+  tags = {
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+  }
 }
 
 resource "aws_vpc_dhcp_options_association" "vpc-association" {
@@ -214,6 +219,7 @@ resource "aws_subnet" "subnet_pub" {
     tags = {
         Name = "subnet_pub.${count.index}"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -229,6 +235,22 @@ resource "aws_subnet" "subnet_priv" {
   tags = {
       Name = "subnet_priv.${count.index}"
       Clusterid = var.cluster_name
+      "kubernetes.io/cluster/${var.cluster_name}" = "owned"
+      Project = "OCP-CAM"
+  }
+}
+
+#ENDPOINTS
+#S3 endpoint
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id = aws_vpc.vpc.id
+  service_name = "com.amazonaws.${var.region_name}.s3"
+  route_table_ids = concat(aws_route_table.rtable_priv[*].id, [aws_route_table.rtable_igw.id]) 
+  vpc_endpoint_type = "Gateway"
+
+  tags = {
+      Clusterid = var.cluster_name
+      "kubernetes.io/cluster/${var.cluster_name}" = "owned"
       Project = "OCP-CAM"
   }
 }
@@ -240,6 +262,7 @@ resource "aws_internet_gateway" "intergw" {
     tags = {
         Name = "intergw"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -251,6 +274,7 @@ resource "aws_eip" "nateip" {
   tags = {
       Name = "nateip.${count.index}"
       Clusterid = var.cluster_name
+      "kubernetes.io/cluster/${var.cluster_name}" = "owned"
       Project = "OCP-CAM"
   }
 }
@@ -262,6 +286,7 @@ resource "aws_eip" "bastion_eip" {
     tags = {
         Name = "bastion_eip"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -276,6 +301,7 @@ resource "aws_nat_gateway" "natgw" {
     tags = {
         Name = "natgw.${count.index}"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -292,6 +318,7 @@ resource "aws_route_table" "rtable_igw" {
     tags = {
         Name = "rtable_igw"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -315,6 +342,7 @@ resource "aws_route_table" "rtable_priv" {
     tags = {
         Name = "rtable_priv.${count.index}"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -342,6 +370,7 @@ resource "aws_security_group" "sg-ssh-in" {
     tags = {
         Name = "sg-ssh"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -361,6 +390,7 @@ resource "aws_security_group" "sg-all-out" {
     tags = {
         Name = "all-out"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -380,6 +410,7 @@ resource "aws_security_group" "sg-ssh-in-local" {
     tags = {
         Name = "sg-ssh-local"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -406,6 +437,7 @@ resource "aws_security_group" "sg-web-in" {
     tags = {
         Name = "sg-web-in"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -445,6 +477,7 @@ resource "aws_security_group" "sg-master" {
     tags = {
         Name = "sg-master"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -499,6 +532,7 @@ resource "aws_security_group" "sg-node" {
     tags = {
         Name = "sg-node"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -525,6 +559,7 @@ resource "aws_security_group" "sg-web-out" {
     tags = {
         Name = "sg-web-out"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
     }
 }
@@ -565,6 +600,7 @@ resource "aws_elb" "elb-master-public" {
   tags = {
     Name = "lb-master-public"
     Clusterid = var.cluster_name
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     Project = "OCP-CAM"
   }
 }
@@ -597,6 +633,7 @@ resource "aws_elb" "elb-master-private" {
   tags = {
     Name = "lb-master-private"
     Clusterid = var.cluster_name
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     Project = "OCP-CAM"
   }
 }
@@ -636,6 +673,7 @@ resource "aws_elb" "elb-infra-public" {
   tags = {
     Name = "lb-infra-public"
     Clusterid = var.cluster_name
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     Project = "OCP-CAM"
   }
 }
@@ -664,12 +702,14 @@ resource "aws_instance" "tale_bastion" {
   tags = {
         Name = "bastion"
         Clusterid = var.cluster_name
+        "kubernetes.io/cluster/${var.cluster_name}" = "owned"
         Project = "OCP-CAM"
   }
 }
 
 #Masters
 resource "aws_instance" "master" {
+#If master_count is 1 or 3, count gets that value, otherwise it gets 3.  Only 1 or 3 are allowed values
   count = var.master_count == 1 || var.master_count == 3 ? var.master_count : 3
   ami = var.rhel7-ami[var.region_name]
   instance_type = var.master-instance-type
@@ -793,6 +833,7 @@ resource "aws_route53_zone" "external" {
   tags = {
     Name = "external"
     Clusterid = var.cluster_name
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     Project = "OCP-CAM"
   }
 }
@@ -822,6 +863,7 @@ resource "aws_route53_zone" "internal" {
   tags = {
     Name = "internal"
     Clusterid = var.cluster_name
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     Project = "OCP-CAM"
   }
 }
@@ -885,6 +927,7 @@ resource "aws_s3_bucket" "registry-bucket" {
   tags = {
     Name  = "Registry bucket"
     Clusterid = var.cluster_name
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     Project = "OCP-CAM"
   }
 }
@@ -905,6 +948,7 @@ resource "aws_iam_user" "iam-admin" {
    tags = {
     Name = "iam-admin"
     Clusterid = var.cluster_name
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     Project = "OCP-CAM"
   }
 }
@@ -963,6 +1007,7 @@ resource "aws_iam_user" "iam-registry" {
    tags = {
     Name = "iam-registry"
     Clusterid = var.cluster_name
+    "kubernetes.io/cluster/${var.cluster_name}" = "owned"
     Project = "OCP-CAM"
   }
 }
