@@ -41,6 +41,8 @@
 
 * [Cluster deployment instructions](#cluster-deployment-instructions)
 
+  * [Accessing the cluster](*accessing-the-cluster)
+
 * [Cluster decommissioning instructions](#cluster-decommissioning-instructions)
 
 
