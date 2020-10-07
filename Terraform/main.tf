@@ -4,7 +4,6 @@
 provider "aws" {
   region = var.region_name
 #  version = "~> 2.39"
-  shared_credentials_file = "redhat-credentials.ini"
 }
 
 #This is only used to generate random values
@@ -675,6 +674,7 @@ resource "aws_route53_zone" "external" {
   }
 }
 
+#Creates the pointer from the base domain to the external cluster domain
 resource "aws_route53_record" "external-ns" {
   zone_id = data.aws_route53_zone.domain.zone_id
   name    = "${var.cluster_name}.${data.aws_route53_zone.domain.name}"
