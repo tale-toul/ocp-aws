@@ -18,9 +18,9 @@ variable "vpc_name" {
 }
 
 variable "dns_domain_ID" {
-  description = "Zone ID for the route 53 DNS domain that will be used for this cluster"
+  description = "Zone ID for the route53 DNS domain that will be used for this cluster"
   type = string
-  default = "Z1UPG9G4YY4YK6"
+  default = "Z0246469SRQO0B41TRDD"
 }
 
 #Not all instances types are available in all regions
