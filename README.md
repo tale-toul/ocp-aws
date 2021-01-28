@@ -71,20 +71,15 @@ The Terraform directory contains the neccessary files to create the infrastructu
 
 The terraform manifest is designed to be run against a region with 3 availability zones, it will not work on regions with only 2 availability zones.
 
-One provider is defined (https://www.terraform.io/docs/configuration/providers.html) to create the resources in AWS.  A credentials file containing the access key ID and the access key secret is created with the following format:
+One provider is defined (https://www.terraform.io/docs/configuration/providers.html) to create the resources in AWS.  The credentials for the AWS user with privileges to create resources can be defined in a file containing the access key ID and the access key secret with the following format. Put this file in ~/.aws/credentials:
 
 ```
 [default]
 aws_access_key_id=xxxx
 aws_secret_access_key=xxxx
 ```
-and the provider definition contains the following directive referencing the credentials file:
 
-```
-  shared_credentials_file = "aws-credentials.ini"
-```
-
-When using credentials files it is important to make sure that the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** are not defined in the session, otherwise extraneus errors will appear when running terraform.
+Alternatively the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** can be used 
 
 A second provider is defined to generate random vales, like the name of the S3 bucket for the registry, that must be unique in all AWS.
  
@@ -323,7 +318,7 @@ In the output section there are entries to print the access key ID and access ke
 
 ### Component creation with loops
 
-Many of the components in the infrastructure are instantiated more than once to add high availability and possibly load balancing to the cluster, this is the case of the availability zones, subnets, nat gateways, master infra and worker instances, etc.  In all cases the instances of these components are similar so it is possible to use a loop to create them instead of using a definition block for each one; with the use of loops the terraform manifest is more compact an aesier to maintain.  In the case of the infra and worker instances the number is controlled by variables (**infra_count**, **worker_count**) with a default value of 3, but they can be modified by the user to create the desired amount of infra and worker nodes.
+Many of the components in the infrastructure are comprised of more than one instance to add high availability and possibly load balancing to the cluster, this is the case of the availability zones, subnets, nat gateways, master infra and worker instances, etc.  In all cases the instances of these components are similar so it is possible to use a loop to create them instead of using a definition block for each one; with the use of loops the terraform manifest is more compact an aesier to maintain.  In the case of the infra and worker instances the number is controlled by variables (**infra_count**, **worker_count**) with a default value of 3, but they can be modified by the user to create the desired amount of infra and worker nodes.
 
 Other components, like the subnets, are fixed to a number of 3, to refelec the number of availability zones in most of the regions.  
 
@@ -599,7 +594,7 @@ The [OpenShift documentation](https://docs.openshift.com/container-platform/3.11
 
 [Terraform](https://www.terraform.io/) and [Ansible](https://www.ansible.com/) must be installed in the host where the installation will be run from; an [AWS](https://aws.amazon.com/) account is needed to create the infrastructure elements; A [Red Hat](https://access.redhat.com) user account with entitlements for installing OpenShift is required. 
 
-* Create a credentials file for the Terraform provider in the Terraform directory, as defined in the main.tf file, see the [Terraform section](#terraform) of this document.
+* Create a credentials file for the Terraform provider as defined in the main.tf file, see the [Terraform section](#terraform) of this document.
 
 * Create an SSH key pair with the following command and copy it to the terraform directory, the terraform configuration expects the output files to be called ocp-ssh and ocp-ssh.pub by default, but the name can be changed via the terraform variable *ssh-keyfile*:
 
