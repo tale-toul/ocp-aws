@@ -602,7 +602,7 @@ The [OpenShift documentation](https://docs.openshift.com/container-platform/3.11
 $ ssh-keygen -o -t rsa -f ocp-ssh -N ""
 ```
 
-* The default identity provider is an htpassword file, this file must be created and filled with entries, the prerequisites playbook and the ansible inventory used to deploy the cluster expect this file to be at **Ansible/files/htpasswd.openshift**, for example:
+* The default identity provider is an htpassword file, this file must be created and populated with entries, the prerequisites playbook and the ansible inventory used to deploy the cluster expect this file to be at **Ansible/files/htpasswd.openshift**, for example:
 
 ```
 $ htpasswd -cb htpasswd.openshift user1 user1_password
@@ -631,7 +631,7 @@ $ ansible-vault encrypt linux_vars.txt
 ```
 
 
-* Many terraform variables are defined and can be used to modify several aspects of the infraestructure deployment, some of these variables need to be modified to avoid collitions with other cluster previously deployed using this same terraform file. Review these variables and assing values where needed, in particular:
+* Many terraform variables are defined and can be used to modify several aspects of the infraestructure deployment, some of these variables need to be modified to avoid collitions with other cluster previously deployed using this same terraform file. Review these variables and assign values where needed, in particular:
 
   * **region_name**.- The AWS region to deploy the infrastructure on, by default the region is **eu-west-1** (Ireland ).  For example  `-var="region_name=eu-central-1"`
 
@@ -643,7 +643,7 @@ $ ansible-vault encrypt linux_vars.txt
 
   * **master_count**; **infra_count**; **worker_count**.- Number of master (1 or 3), infra and worker nodes.
 
-* Terrafor needs to be initialize, only the first time it is used, for that use the following command in the terraform directory:
+* Terraform needs to be initialize, only the first time it is used, for that use the following command in the terraform directory:
 
 ```
 $ terraform init
@@ -685,17 +685,19 @@ $ ssh-add <path-to-private-key-file>
 $ ansible-playbook  -i inventory-prereq --vault-id vault_id prereqs-ocp.yml 
 ```
 
-* Review the inventory file and correct/modify as required, in particular:
-
+* Ssh into the bastion host and review the inventory file and correct/modify as required, in particular:
+```
+$ ssh -F ssh.cfg bastion.ocpext.example.com
+bastion$ cd OCP311
+bastion$ vim inventario
+```
   * The version installed is 3.11.latest, if another z version is wanted, the following variables must be defined: **openshift_image_tag**; **openshift_pkg_version**
 
   * The DNS subdomain name for the applications deployed in the cluster, this is defined in the variable **openshift_master_default_subdomain**
 
-* ssh to the bastion host and run the prerequisites and deploy cluster openshift playbook:
+* Run the prerequisites and deploy cluster openshift playbook:
 
 ```
-$ ssh -F ssh.cfg bastion.ocpext.example.com
-bastion$ cd OCP311
 bastion$ ansible-playbook -vvv /usr/share/ansible/openshift-ansible/playbooks/prerequisites.yml
 bastion$ ansible-playbook -vvv /usr/share/ansible/openshift-ansible/playbooks/deploy_cluster.yml
 ```
