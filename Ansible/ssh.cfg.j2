@@ -1,5 +1,6 @@
 Host *
   ForwardAgent yes
+  ServerAliveInterval 60
 Host {{ bastion_dns_name }}
   user                    ec2-user
   StrictHostKeyChecking   no

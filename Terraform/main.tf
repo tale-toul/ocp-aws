@@ -756,7 +756,7 @@ resource "random_string" "bucket_name" {
 #Registry Bucket
 resource "aws_s3_bucket" "registry-bucket" {
   bucket = random_string.bucket_name.result
-  region = var.region_name
+#  region = var.region_name
   force_destroy = true
 
   acl    = "private"
@@ -932,7 +932,7 @@ output "iam_admin_key_id" {
   description = "ID of admin key"
 }
 output "iam_admin_key" {
-  value = aws_iam_access_key.key-admin.secret
+  value = nonsensitive(aws_iam_access_key.key-admin.secret)
   description = "Secret key for the iam user admin"
 }
 output "iam_registry_key_id" {
@@ -940,7 +940,7 @@ output "iam_registry_key_id" {
   description = "ID of registry key"
 }
 output "iam_registry_key" {
-  value = aws_iam_access_key.key-registry.secret
+  value = nonsensitive(aws_iam_access_key.key-registry.secret)
   description = "Secret key for the iam user registry"
 }
 output "iam_admin_encrypted_key" {
