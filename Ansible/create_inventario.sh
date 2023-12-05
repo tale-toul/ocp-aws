@@ -3,17 +3,17 @@
 TERRAFORM_STATE=../Terraform/terraform.tfstate
 
 #Save master host names in an array
-for host in $(terraform output -state=$TERRAFORM_STATE masters_name|egrep -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'); do
+for host in $(terraform output -state=$TERRAFORM_STATE masters_name|grep -E -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'); do
   masters+=($host)
 done
 
 #Save infra host names in an array
-for host in $(terraform output -state=$TERRAFORM_STATE infras_name|egrep -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'); do
+for host in $(terraform output -state=$TERRAFORM_STATE infras_name|grep -E -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'); do
   infras+=($host)
 done
 
 #Save worker host names in an array
-for host in $(terraform output -state=$TERRAFORM_STATE workers_name|egrep -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'); do
+for host in $(terraform output -state=$TERRAFORM_STATE workers_name|grep -E -v -e '\[' -e '\]'|sed -e 's/"//g' -e 's/,//g'); do
   workers+=($host)
 done
 

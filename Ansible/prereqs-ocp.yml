@@ -55,7 +55,9 @@
               state: present
               username: "{{ subscription_username }}"
               password: "{{ subscription_password }}"
-              pool_ids: 2c94a891848d39ce0184d8a891805070
+              pool_ids: 8a85f9a07db4828b017dc51ad91008fb
+        - name: Enable subscription manager to manage repos
+          shell: subscription-manager config --rhsm.manage_repos=1
         - name: Enable the required repositories for Openshift
           rhsm_repository:
               name: 
