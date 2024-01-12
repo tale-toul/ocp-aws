@@ -3,12 +3,10 @@
 #https://www.terraform.io/docs/providers/aws/index.html
 provider "aws" {
   region = var.region_name
-#  version = "~> 2.39"
 }
 
 #This is only used to generate random values
 provider "random" {
-  version = "~> 2.2"
 }
 
 #VPC

@@ -79,7 +79,7 @@ aws_access_key_id=xxxx
 aws_secret_access_key=xxxx
 ```
 
-Alternatively the environment variables **WS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** can be used 
+Alternatively the environment variables **AWS_SECRET_ACCESS_KEY** and **AWS_ACCESS_KEY_ID** can be used 
 
 A second provider is defined to generate random vales, like the name of the S3 bucket for the registry, that must be unique in all AWS.
  
